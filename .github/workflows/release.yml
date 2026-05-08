@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Lint before release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Lint .ps1 files
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Recurse -Filter '*.ps1' |
+            Where-Object { $_.FullName -notlike '*node_modules*' }
+          $results = $scripts | ForEach-Object {
+            Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error')
+          }
+          if ($results) {
+            $results | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) issue(s)."
+          }
+
+  release:
+    name: Package and Release
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Kit as zip
+        run: |
+          cd Claude-Provider-Profiles-Kit
+          zip -r ../Claude-Provider-Profiles-Kit.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Claude-Provider-Profiles-Kit.zip
+          generate_release_notes: true

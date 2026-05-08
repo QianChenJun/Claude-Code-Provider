@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "profiles": {
+    "mi": {
+      "displayName": "Xiaomi MiMo",
+      "shortcut": "mi-claude",
+      "baseUrl": "https://example.com/anthropic",
+      "authEnv": "ANTHROPIC_AUTH_TOKEN",
+      "apiKeyEnv": "MI_CLAUDE_API_KEY",
+      "apiKey": "",
+      "extraEnv": {
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+      }
+    },
+    "ds": {
+      "displayName": "DeepSeek",
+      "shortcut": "ds-claude",
+      "baseUrl": "https://example.com/anthropic",
+      "authEnv": "ANTHROPIC_AUTH_TOKEN",
+      "apiKeyEnv": "DS_CLAUDE_API_KEY",
+      "apiKey": "",
+      "model": "deepseek-model-name",
+      "haikuModel": "deepseek-haiku-model-name",
+      "sonnetModel": "deepseek-sonnet-model-name",
+      "opusModel": "deepseek-opus-model-name",
+      "extraEnv": {
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+      }
+    }
+  }
+}

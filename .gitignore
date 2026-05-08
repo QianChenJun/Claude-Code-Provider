@@ -1,0 +1,28 @@
+# Distributions / release artifacts
+*.zip
+
+# Actual provider configs (contain API keys)
+providers.json
+**/providers.json
+
+# Manifests generated at install time
+ccp-generated-shortcuts.json
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Claude Code local session config
+.claude/settings.local.json
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-powershell:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Lint .ps1 files
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Recurse -Filter '*.ps1' |
+            Where-Object { $_.FullName -notlike '*node_modules*' }
+          if ($scripts.Count -eq 0) {
+            Write-Output 'No .ps1 files found, skipping.'
+            exit 0
+          }
+          $results = $scripts | ForEach-Object {
+            Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error')
+          }
+          if ($results) {
+            $results | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) issue(s)."
+          }
+          Write-Output 'PSScriptAnalyzer: no issues.'
+
+  lint-javascript:
+    name: JavaScript Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check .mjs / .js syntax
+        run: |
+          shopt -s globstar nullglob
+          files=( **/*.mjs **/*.js )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No JS/MJS files found, skipping."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "Checking $f"
+            node --check "$f"
+          done
+          echo "All files OK."
