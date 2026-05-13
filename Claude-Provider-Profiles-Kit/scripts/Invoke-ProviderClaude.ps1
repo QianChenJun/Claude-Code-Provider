@@ -372,7 +372,8 @@ try {
         }
     }
 
-    Write-Utf8NoBomJson -Path $tempSettingsPath -Value $settings
+    # Only write env overrides to avoid Claude Code merge flattening hooks arrays
+    Write-Utf8NoBomJson -Path $tempSettingsPath -Value @{ env = $settings.env }
 
     $launchArgs = @('--setting-sources', 'project,user,local', '--settings', $tempSettingsPath)
     $cliModel = Get-ProfileValue -Map $profileConfig -Names @('cliModel', 'claudeCliModel')
