@@ -374,7 +374,7 @@ try {
 
     Write-Utf8NoBomJson -Path $tempSettingsPath -Value $settings
 
-    $launchArgs = @('--setting-sources', 'project,local', '--settings', $tempSettingsPath)
+    $launchArgs = @('--setting-sources', 'project,user,local', '--settings', $tempSettingsPath)
     $cliModel = Get-ProfileValue -Map $profileConfig -Names @('cliModel', 'claudeCliModel')
     if ($cliModel -and -not (Test-HasCliModelArg -Args $ClaudeArgs)) {
         $launchArgs += @('--model', "$cliModel")
