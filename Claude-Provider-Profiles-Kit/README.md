@@ -8,6 +8,7 @@
 - 只在运行快捷命令时临时覆盖供应商 URL、API Key 和模型。
 - 支持 `ccp-mi`、`ccp-ds`、`ccp-xxx` 这类统一前缀快捷命令。
 - 支持本地页面管理供应商配置。
+- 额外附带 Codex CLI 第三方 provider 的 CLI 级切换脚本（`cdp-*`）。
 
 本安装包不包含真实 API Key。
 
@@ -21,6 +22,12 @@
 
 ```powershell
 claude --version
+```
+
+如果要使用 Codex CLI 的快捷命令（`cdp-*`），还需要：
+
+```powershell
+codex --version
 ```
 
 如果要使用本地管理页面，还需要：
@@ -215,6 +222,59 @@ ccp-sync
 ---
 
 ## 8. 常见问题
+
+## 8.5 Codex CLI 第三方 provider（CLI MVP）
+
+安装后还会生成一套 Codex CLI 快捷命令：
+
+```powershell
+cdp
+cdp-list
+cdp-sync
+cdp-<profile>
+<profile>-codex
+```
+
+Codex 配置文件：
+
+```powershell
+%USERPROFILE%\.codex\provider-profiles\providers.json
+```
+
+它的实现方式不是改 `~/.codex/config.toml`，而是启动时临时通过 `codex -c ...`
+注入 `model_provider` / `model_providers.<id>` 配置。
+
+最小示例：
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "proxy": {
+      "displayName": "LLM Proxy",
+      "shortcut": "proxy-codex",
+      "baseUrl": "https://example.com/v1",
+      "apiKeyEnv": "PROXY_CODEX_API_KEY",
+      "model": "provider-model-name"
+    }
+  }
+}
+```
+
+可选字段还支持：
+
+- `queryParams`
+- `httpHeaders`
+- `envHttpHeaders`
+- `modelContextWindow`
+- `modelReasoningEffort`
+- `modelReasoningSummary`
+- `modelVerbosity`
+- `supportsWebsockets`
+- `requestMaxRetries`
+- `streamMaxRetries`
+- `streamIdleTimeoutMs`
+- `extraEnv`
 
 ### 快捷命令找不到
 

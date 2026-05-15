@@ -9,6 +9,10 @@ English summary: CCP lets you switch between multiple Anthropic-compatible API p
 It writes a temporary `settings.json` with overridden `ANTHROPIC_BASE_URL`, API key, and
 model mappings, then launches `claude`. On exit it cleans up — no traces left.
 
+另外，本仓库现在附带一个 **Codex CLI 第三方 provider CLI MVP**：
+它基于 Codex 官方支持的 `model_provider` / `model_providers` 配置能力，临时注入 `-c`
+覆盖项来启动 `codex`，不改你原有 `~/.codex/config.toml`。
+
 ---
 
 ## 目录
@@ -19,6 +23,7 @@ model mappings, then launches `claude`. On exit it cleans up — no traces left.
 - [API Key 配置](#api-key-配置)
 - [providers.json 写法](#providersjson-写法)
 - [新增供应商](#新增供应商)
+- [Codex CLI 第三方 provider](#codex-cli-第三方-provider)
 - [常见问题](#常见问题)
 - [维护建议](#维护建议)
 - [License](#license)
@@ -235,6 +240,74 @@ Remove-Item Env:\ANTHROPIC_DEFAULT_OPUS_MODEL -ErrorAction SilentlyContinue
 ### Claude Code 更新后会失效吗
 
 不会。快捷命令最终调用的是原始 `claude`，不修改 Claude Code 安装文件。
+
+## Codex CLI 第三方 provider
+
+这是当前先落地的 **CLI 级 MVP**，先不改现有 Web 管理页。
+
+安装后会额外生成：
+
+```powershell
+cdp
+cdp-list
+cdp-sync
+cdp-<profile>
+<profile>-codex
+```
+
+Codex 配置文件位置：
+
+```powershell
+%USERPROFILE%\.codex\provider-profiles\providers.json
+```
+
+支持的最小字段示例：
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "proxy": {
+      "displayName": "LLM Proxy",
+      "shortcut": "proxy-codex",
+      "baseUrl": "https://example.com/v1",
+      "apiKeyEnv": "PROXY_CODEX_API_KEY",
+      "model": "provider-model-name"
+    }
+  }
+}
+```
+
+可选扩展字段：
+
+- `queryParams`
+- `httpHeaders`
+- `envHttpHeaders`
+- `modelContextWindow`
+- `modelReasoningEffort`
+- `modelReasoningSummary`
+- `modelVerbosity`
+- `supportsWebsockets`
+- `requestMaxRetries`
+- `streamMaxRetries`
+- `streamIdleTimeoutMs`
+- `extraEnv`
+
+使用示例：
+
+```powershell
+cdp                    # 交互选择 provider
+cdp proxy              # 使用 proxy 配置启动 codex
+cdp-proxy              # 直接启动
+proxy-codex            # 兼容快捷命令
+cdp proxy exec "解释当前仓库结构"
+```
+
+说明：
+
+- 当前实现只对 **Codex 官方支持的 `responses` provider** 做临时注入。
+- 不修改你原有 `~/.codex/config.toml`，只在当前命令进程内临时注入 provider 和 token。
+- 现有 Claude 侧 `ccp`、`ccp-manager` 不受影响。
 
 ---
 
