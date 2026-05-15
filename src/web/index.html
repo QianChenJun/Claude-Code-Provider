@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Provider Profiles</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Provider Profiles</p>
+        <h1 id="tool-title">Claude Code 供应商配置</h1>
+        <p class="summary" id="tool-summary">
+          保留原配置，只覆盖接口地址、API Key 和模型。新增供应商后，保存并运行同步。
+        </p>
+      </div>
+      <div class="hero-card">
+        <nav class="tool-tabs" id="tool-tabs">
+          <button class="tab active" data-tool="claude">Claude Code</button>
+          <button class="tab" data-tool="codex">Codex CLI</button>
+        </nav>
+        <span>配置文件</span>
+        <code id="config-path">loading...</code>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <button id="add-profile" class="primary">新增配置</button>
+      <button id="save-config">保存配置</button>
+      <button id="save-sync-config">保存并同步</button>
+      <button id="reload-config">重新加载</button>
+      <button id="expand-all">全部展开</button>
+      <button id="collapse-all">全部收起</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <section id="profiles" class="profiles" aria-live="polite"></section>
+
+    <!-- Claude profile template -->
+    <template id="template-claude">
+      <article class="profile-card">
+        <header class="profile-head">
+          <button data-action="toggle" class="profile-toggle" type="button" aria-expanded="false">
+            <span data-summary-name></span>
+            <span data-summary-meta></span>
+          </button>
+          <div class="card-actions">
+            <button data-action="copy" type="button">复制</button>
+            <button data-action="remove" class="danger" type="button">删除</button>
+          </div>
+        </header>
+        <div class="profile-body">
+          <div class="grid">
+            <label>配置 ID<input data-field="id" class="profile-id" placeholder="profile_id"></label>
+            <label>显示名称<input data-field="displayName" placeholder="供应商显示名"></label>
+            <label>快捷命令<input data-field="shortcut" placeholder="xxx-claude"></label>
+            <label class="wide">接口地址<input data-field="baseUrl" placeholder="https://example.com/anthropic"></label>
+            <label>鉴权方式<select data-field="authEnv">
+              <option value="ANTHROPIC_AUTH_TOKEN">ANTHROPIC_AUTH_TOKEN</option>
+              <option value="ANTHROPIC_API_KEY">ANTHROPIC_API_KEY</option>
+            </select></label>
+            <label>API Key<input data-field="apiKey" type="password" autocomplete="off" placeholder="可直接填，也可用下方环境变量"></label>
+            <label>API Key 环境变量<input data-field="apiKeyEnv" placeholder="XXX_CLAUDE_API_KEY"></label>
+            <label>API Key 文件<input data-field="apiKeyFile" placeholder="%USERPROFILE%\.keys\provider.txt"></label>
+            <label>默认模型<input data-field="model" placeholder="留空则不覆盖"></label>
+            <label>Haiku 模型<input data-field="haikuModel" placeholder="留空则不覆盖"></label>
+            <label>Sonnet 模型<input data-field="sonnetModel" placeholder="留空则不覆盖"></label>
+            <label>Opus 模型<input data-field="opusModel" placeholder="留空则不覆盖"></label>
+            <label>CLI 默认模型<input data-field="cliModel" placeholder="--model 默认值"></label>
+            <label class="wide">extraEnv JSON<textarea data-field="extraEnv" rows="2" placeholder='{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1"}'></textarea></label>
+          </div>
+          <footer><code data-preview></code></footer>
+        </div>
+      </article>
+    </template>
+
+    <!-- Codex profile template -->
+    <template id="template-codex">
+      <article class="profile-card">
+        <header class="profile-head">
+          <button data-action="toggle" class="profile-toggle" type="button" aria-expanded="false">
+            <span data-summary-name></span>
+            <span data-summary-meta></span>
+          </button>
+          <div class="card-actions">
+            <button data-action="copy" type="button">复制</button>
+            <button data-action="remove" class="danger" type="button">删除</button>
+          </div>
+        </header>
+        <div class="profile-body">
+          <div class="grid">
+            <label>配置 ID<input data-field="id" class="profile-id" placeholder="profile_id"></label>
+            <label>显示名称<input data-field="displayName" placeholder="供应商显示名"></label>
+            <label>快捷命令<input data-field="shortcut" placeholder="xxx-codex"></label>
+            <label class="wide">接口地址<input data-field="baseUrl" placeholder="https://example.com/v1"></label>
+            <label>API Key<input data-field="apiKey" type="password" autocomplete="off" placeholder="可直接填，也可用下方环境变量"></label>
+            <label>API Key 环境变量<input data-field="apiKeyEnv" placeholder="XXX_CODEX_API_KEY"></label>
+            <label>API Key 文件<input data-field="apiKeyFile" placeholder="%USERPROFILE%\.keys\provider.txt"></label>
+            <label>默认模型<input data-field="model" placeholder="供应商模型名"></label>
+            <label>上下文窗口<input data-field="modelContextWindow" placeholder="1000000"></label>
+            <label>推理强度<input data-field="modelReasoningEffort" placeholder="high / xhigh / max"></label>
+            <label>推理摘要<input data-field="modelReasoningSummary" placeholder="auto / concise"></label>
+            <label>输出冗长度<input data-field="modelVerbosity" placeholder="low / medium / high"></label>
+            <label>WebSocket<select data-field="supportsWebsockets">
+              <option value="">默认</option>
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select></label>
+            <label>请求重试次数<input data-field="requestMaxRetries" placeholder="3"></label>
+            <label>流重试次数<input data-field="streamMaxRetries" placeholder="10"></label>
+            <label>流空闲超时(ms)<input data-field="streamIdleTimeoutMs" placeholder="300000"></label>
+            <label class="wide">queryParams JSON<textarea data-field="queryParams" rows="2" placeholder='{"api-version":"2025-04-01-preview"}'></textarea></label>
+            <label class="wide">httpHeaders JSON<textarea data-field="httpHeaders" rows="2" placeholder='{"X-Title":"Codex CLI"}'></textarea></label>
+            <label class="wide">envHttpHeaders JSON<textarea data-field="envHttpHeaders" rows="2" placeholder='{"X-Api-Key":"ENV_KEY_NAME"}'></textarea></label>
+            <label class="wide">extraEnv JSON<textarea data-field="extraEnv" rows="2" placeholder='{"HTTP_PROXY":"http://127.0.0.1:7897"}'></textarea></label>
+          </div>
+          <footer><code data-preview></code></footer>
+        </div>
+      </article>
+    </template>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "profiles": {
+    "mi": {
+      "displayName": "Xiaomi MiMo",
+      "shortcut": "mi-codex",
+      "baseUrl": "http://your-mi-provider.example/v1",
+      "apiKeyEnv": "MI_CODEX_API_KEY",
+      "model": "claude-sonnet-4-6"
+    },
+    "ds": {
+      "displayName": "DeepSeek",
+      "shortcut": "ds-codex",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKeyEnv": "DS_CODEX_API_KEY",
+      "model": "deepseek-v4-pro"
+    },
+    "gpt": {
+      "displayName": "GPT",
+      "shortcut": "gpt-codex",
+      "baseUrl": "https://your-gpt-provider.example/v1",
+      "apiKeyEnv": "GPT_CODEX_API_KEY",
+      "model": "gpt-5.5"
+    },
+    "any": {
+      "displayName": "AnyRouter",
+      "shortcut": "any-codex",
+      "baseUrl": "https://your-anyrouter-provider.example/v1",
+      "apiKeyEnv": "ANY_CODEX_API_KEY",
+      "model": "gpt-5.5"
+    }
+  }
+}

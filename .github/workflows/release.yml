@@ -43,6 +43,7 @@ jobs:
 
       - name: Package Kit as zip
         run: |
+          cp -r src Claude-Provider-Profiles-Kit/src
           cd Claude-Provider-Profiles-Kit
           zip -r ../Claude-Provider-Profiles-Kit.zip .
 

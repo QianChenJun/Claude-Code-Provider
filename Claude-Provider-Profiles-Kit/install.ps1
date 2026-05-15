@@ -1,4 +1,11 @@
 #!/usr/bin/env pwsh
+<#
+.SYNOPSIS
+    安装 Provider Profiles 工具集（Claude Code + Codex CLI）。
+.DESCRIPTION
+    部署核心模块、工具脚本和 Web 管理台到用户目录。
+    生成 bin 快捷命令并同步供应商快捷方式。
+#>
 [CmdletBinding()]
 param(
     [switch]$OverwriteConfig,
@@ -7,161 +14,162 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$kitRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sourceScripts = Join-Path $kitRoot 'scripts'
-$legacyRoot = Join-Path $env:USERPROFILE '.cc-switch\claude-profiles'
-$targetRoot = Join-Path $env:USERPROFILE '.claude\provider-profiles'
-$targetWeb = Join-Path $targetRoot 'web'
-$binDir = Join-Path $env:USERPROFILE '.claude\bin'
-$codexTargetRoot = Join-Path $env:USERPROFILE '.codex\provider-profiles'
-$codexTargetWeb = Join-Path $codexTargetRoot 'web'
-$codexBinDir = Join-Path $env:USERPROFILE '.codex\bin'
-$exampleConfig = Join-Path $kitRoot 'providers.example.json'
-$targetConfig = Join-Path $targetRoot 'providers.json'
-$legacyConfig = Join-Path $legacyRoot 'providers.json'
-$codexExampleConfig = Join-Path $kitRoot 'codex-providers.example.json'
-$codexTargetConfig = Join-Path $codexTargetRoot 'providers.json'
-$encoding = [System.Text.UTF8Encoding]::new($false)
-
-function Write-Shim {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Content
-    )
-    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+$kitRoot    = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Source: try Kit/src first (zip distribution), fall back to repo root src/ (development)
+$sourceRoot = Join-Path $kitRoot 'src'
+if (-not (Test-Path -LiteralPath $sourceRoot)) {
+    $sourceRoot = Join-Path (Split-Path -Parent $kitRoot) 'src'
 }
-
-function Ensure-UserPathItem {
-    param(
-        [Parameter(Mandatory = $true)][string]$PathItem,
-        [switch]$ShouldAdd
-    )
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $pathItems = @()
-    if ($userPath) {
-        $pathItems = $userPath -split ';' | Where-Object { $_ }
-    }
-    $exists = $pathItems | Where-Object { $_.TrimEnd('\') -ieq $PathItem.TrimEnd('\') }
-    if ($exists) {
-        return
-    }
-    if ($ShouldAdd) {
-        $nextPath = (($pathItems + $PathItem) -join ';')
-        [Environment]::SetEnvironmentVariable('Path', $nextPath, 'User')
-        Write-Output "已加入用户 PATH：$PathItem"
-    }
-    else {
-        Write-Warning "快捷命令目录不在用户 PATH 中：$PathItem"
-    }
+if (-not (Test-Path -LiteralPath $sourceRoot)) {
+    throw "找不到 src 目录。请从项目根目录或解压后的 Kit 目录运行安装脚本。"
 }
+$encoding   = [System.Text.UTF8Encoding]::new($false)
 
+# === Target directories ===
+$claudeRoot = Join-Path $env:USERPROFILE '.claude\provider-profiles'
+$claudeBin  = Join-Path $env:USERPROFILE '.claude\bin'
+$codexRoot  = Join-Path $env:USERPROFILE '.codex\provider-profiles'
+$codexBin   = Join-Path $env:USERPROFILE '.codex\bin'
+
+# === Config templates ===
+$claudeExampleCfg = Join-Path $kitRoot 'providers.example.json'
+$codexExampleCfg  = Join-Path $kitRoot 'codex-providers.example.json'
+
+# Prerequisites
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Warning "未找到 claude 命令。请先安装 Claude Code，并验证：claude --version"
+    Write-Warning "未找到 claude 命令。请先安装 Claude Code。"
 }
 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
-    Write-Warning "未找到 codex 命令。请先安装 Codex CLI，并验证：codex --version"
+    Write-Warning "未找到 codex 命令。请先安装 Codex CLI。"
 }
 
-New-Item -ItemType Directory -Force -Path $targetWeb | Out-Null
-New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-New-Item -ItemType Directory -Force -Path $codexTargetRoot | Out-Null
-New-Item -ItemType Directory -Force -Path $codexTargetWeb | Out-Null
-New-Item -ItemType Directory -Force -Path $codexBinDir | Out-Null
+# === Create target directories ===
+foreach ($dir in @(
+    (Join-Path $claudeRoot 'src\core'),
+    (Join-Path $claudeRoot 'src\tools\claude'),
+    (Join-Path $claudeRoot 'web'),
+    $claudeBin,
+    (Join-Path $codexRoot 'src\core'),
+    (Join-Path $codexRoot 'src\tools\codex'),
+    (Join-Path $codexRoot 'web'),
+    $codexBin
+)) {
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+}
 
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Invoke-ProviderClaude.ps1') -Destination (Join-Path $targetRoot 'Invoke-ProviderClaude.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Manage-ClaudeProfiles.ps1') -Destination (Join-Path $targetRoot 'Manage-ClaudeProfiles.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Sync-ClaudeProfileShortcuts.ps1') -Destination (Join-Path $targetRoot 'Sync-ClaudeProfileShortcuts.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'server.mjs') -Destination (Join-Path $targetRoot 'server.mjs') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web\index.html') -Destination (Join-Path $targetWeb 'index.html') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web\styles.css') -Destination (Join-Path $targetWeb 'styles.css') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web\app.js') -Destination (Join-Path $targetWeb 'app.js') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Invoke-ProviderCodex.ps1') -Destination (Join-Path $codexTargetRoot 'Invoke-ProviderCodex.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Manage-CodexProfiles.ps1') -Destination (Join-Path $codexTargetRoot 'Manage-CodexProfiles.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'Sync-CodexProfileShortcuts.ps1') -Destination (Join-Path $codexTargetRoot 'Sync-CodexProfileShortcuts.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'server-codex.mjs') -Destination (Join-Path $codexTargetRoot 'server-codex.mjs') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web-codex\index.html') -Destination (Join-Path $codexTargetWeb 'index.html') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web-codex\app.js') -Destination (Join-Path $codexTargetWeb 'app.js') -Force
-Copy-Item -LiteralPath (Join-Path $sourceScripts 'web\styles.css') -Destination (Join-Path $codexTargetWeb 'styles.css') -Force
+Write-Output "=== 部署核心模块 ==="
 
+# Deploy shared core module to both targets
+foreach ($target in @($claudeRoot, $codexRoot)) {
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'core\ProviderCore.psm1') `
+              -Destination (Join-Path $target 'src\core\ProviderCore.psm1') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Import-Core.ps1') `
+              -Destination (Join-Path $target 'src\tools\Import-Core.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'server.mjs') `
+              -Destination (Join-Path $target 'server.mjs') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\index.html') `
+              -Destination (Join-Path $target 'web\index.html') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\app.js') `
+              -Destination (Join-Path $target 'web\app.js') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\styles.css') `
+              -Destination (Join-Path $target 'web\styles.css') -Force
+}
+Write-Output "已部署核心模块"
+
+Write-Output "=== 部署 Claude Code 工具 ==="
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Invoke-ClaudeProvider.ps1') `
+          -Destination (Join-Path $claudeRoot 'src\tools\claude\Invoke-ClaudeProvider.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Sync-ClaudeShortcuts.ps1') `
+          -Destination (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Manage-ClaudeUI.ps1') `
+          -Destination (Join-Path $claudeRoot 'src\tools\claude\Manage-ClaudeUI.ps1') -Force
+
+Write-Output "=== 部署 Codex CLI 工具 ==="
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Invoke-CodexProvider.ps1') `
+          -Destination (Join-Path $codexRoot 'src\tools\codex\Invoke-CodexProvider.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Sync-CodexShortcuts.ps1') `
+          -Destination (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Manage-CodexUI.ps1') `
+          -Destination (Join-Path $codexRoot 'src\tools\codex\Manage-CodexUI.ps1') -Force
+
+Write-Output "=== 初始化配置文件 ==="
+
+# Claude config
+$claudeConfigPath = Join-Path $claudeRoot 'providers.json'
 if ($OverwriteConfig) {
-    Copy-Item -LiteralPath $exampleConfig -Destination $targetConfig -Force
-    Write-Output "已写入模板配置：$targetConfig"
-}
-elseif (Test-Path -LiteralPath $targetConfig) {
-    Write-Output "保留已有配置：$targetConfig"
-}
-elseif (Test-Path -LiteralPath $legacyConfig) {
-    Copy-Item -LiteralPath $legacyConfig -Destination $targetConfig -Force
-    Write-Output "已从旧目录迁移配置：$legacyConfig -> $targetConfig"
-}
-else {
-    Copy-Item -LiteralPath $exampleConfig -Destination $targetConfig -Force
-    Write-Output "已写入模板配置：$targetConfig"
+    Copy-Item -LiteralPath $claudeExampleCfg -Destination $claudeConfigPath -Force
+    Write-Output "已写入 Claude 配置：$claudeConfigPath"
+} elseif (Test-Path -LiteralPath $claudeConfigPath) {
+    Write-Output "保留已有 Claude 配置"
+} else {
+    # Try legacy migration
+    $legacyPath = Join-Path $env:USERPROFILE '.cc-switch\claude-profiles\providers.json'
+    if (Test-Path -LiteralPath $legacyPath) {
+        Copy-Item -LiteralPath $legacyPath -Destination $claudeConfigPath -Force
+        Write-Output "已从旧目录迁移 Claude 配置"
+    } else {
+        Copy-Item -LiteralPath $claudeExampleCfg -Destination $claudeConfigPath -Force
+        Write-Output "已写入 Claude 配置模板"
+    }
 }
 
+# Codex config
+$codexConfigPath = Join-Path $codexRoot 'providers.json'
 if ($OverwriteConfig) {
-    Copy-Item -LiteralPath $codexExampleConfig -Destination $codexTargetConfig -Force
-    Write-Output "已写入模板配置：$codexTargetConfig"
-}
-elseif (Test-Path -LiteralPath $codexTargetConfig) {
-    Write-Output "保留已有配置：$codexTargetConfig"
-}
-else {
-    Copy-Item -LiteralPath $codexExampleConfig -Destination $codexTargetConfig -Force
-    Write-Output "已写入模板配置：$codexTargetConfig"
+    Copy-Item -LiteralPath $codexExampleCfg -Destination $codexConfigPath -Force
+    Write-Output "已写入 Codex 配置：$codexConfigPath"
+} elseif (Test-Path -LiteralPath $codexConfigPath) {
+    Write-Output "保留已有 Codex 配置"
+} else {
+    Copy-Item -LiteralPath $codexExampleCfg -Destination $codexConfigPath -Force
+    Write-Output "已写入 Codex 配置模板"
 }
 
-Write-Shim -Path (Join-Path $binDir 'provider-claude.ps1') -Content @"
-#!/usr/bin/env pwsh
-`$script = Join-Path `$env:USERPROFILE '.claude\provider-profiles\Invoke-ProviderClaude.ps1'
-& `$script @args
-exit `$LASTEXITCODE
-"@
+Write-Output "=== 生成快捷命令 ==="
 
-Write-Shim -Path (Join-Path $binDir 'claude-profile-manager.ps1') -Content @"
-#!/usr/bin/env pwsh
-`$script = Join-Path `$env:USERPROFILE '.claude\provider-profiles\Manage-ClaudeProfiles.ps1'
-& `$script @args
-exit `$LASTEXITCODE
-"@
+# Generate bin shims for Claude
+& (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1') | Out-Host
 
-Write-Shim -Path (Join-Path $binDir 'sync-claude-profiles.ps1') -Content @"
-#!/usr/bin/env pwsh
-`$script = Join-Path `$env:USERPROFILE '.claude\provider-profiles\Sync-ClaudeProfileShortcuts.ps1'
-& `$script @args
-exit `$LASTEXITCODE
-"@
+# Generate bin shims for Codex
+& (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') | Out-Host
 
-Write-Shim -Path (Join-Path $codexBinDir 'provider-codex.ps1') -Content @"
-#!/usr/bin/env pwsh
-`$script = Join-Path `$env:USERPROFILE '.codex\provider-profiles\Invoke-ProviderCodex.ps1'
-& `$script @args
-exit `$LASTEXITCODE
-"@
+Write-Output "=== PATH 管理 ==="
 
-Write-Shim -Path (Join-Path $codexBinDir 'sync-codex-profiles.ps1') -Content @"
-#!/usr/bin/env pwsh
-`$script = Join-Path `$env:USERPROFILE '.codex\provider-profiles\Sync-CodexProfileShortcuts.ps1'
-& `$script @args
-exit `$LASTEXITCODE
-"@
-
-& (Join-Path $targetRoot 'Sync-ClaudeProfileShortcuts.ps1') | Out-Host
-& (Join-Path $codexTargetRoot 'Sync-CodexProfileShortcuts.ps1') | Out-Host
-
-Ensure-UserPathItem -PathItem $binDir -ShouldAdd:$AddPath
-Ensure-UserPathItem -PathItem $codexBinDir -ShouldAdd:$AddPath
-if ($AddPath) {
-    Write-Output "请重新打开 PowerShell / Windows Terminal 后再使用快捷命令。"
+function Ensure-UserPathItem {
+    param([Parameter(Mandatory)][string]$PathItem, [switch]$ShouldAdd)
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $items = if ($userPath) { $userPath -split ';' | Where-Object { $_ } } else { @() }
+    $exists = $items | Where-Object { $_.TrimEnd('\') -ieq $PathItem.TrimEnd('\') }
+    if ($exists) { return }
+    if ($ShouldAdd) {
+        [Environment]::SetEnvironmentVariable('Path', (($items + $PathItem) -join ';'), 'User')
+        Write-Output "已加入用户 PATH：$PathItem"
+    } else {
+        Write-Warning "快捷命令目录不在 PATH 中：$PathItem"
+    }
 }
-else {
-    Write-Warning "如需自动加入 PATH，请重新执行：.\install.ps1 -AddPath"
-}
+
+Ensure-UserPathItem -PathItem $claudeBin -ShouldAdd:$AddPath
+Ensure-UserPathItem -PathItem $codexBin  -ShouldAdd:$AddPath
 
 Write-Output ""
-Write-Output "安装完成。下一步："
-Write-Output "1. 编辑配置：$targetConfig"
-Write-Output "2. 可选编辑 Codex 配置：$codexTargetConfig"
-Write-Output "3. 设置自己的 API Key 环境变量。"
-Write-Output "4. 重新打开终端后运行：ccp 或 cdp"
-Write-Output "5. 可选管理页面：ccp-manager"
+Write-Output "========================================="
+Write-Output " 安装完成"
+Write-Output "========================================="
+Write-Output ""
+Write-Output "Claude Code (ccp):"
+Write-Output "  配置文件：$claudeConfigPath"
+Write-Output "  快捷命令：$claudeBin"
+Write-Output "  使用：ccp / ccp-mi / ccp-ds / ccp-list / ccp-manager"
+Write-Output ""
+Write-Output "Codex CLI (cdp):"
+Write-Output "  配置文件：$codexConfigPath"
+Write-Output "  快捷命令：$codexBin"
+Write-Output "  使用：cdp / cdp-mi / cdp-ds / cdp-list / cdp-manager"
+Write-Output ""
+
+if (-not $AddPath) {
+    Write-Warning "如需自动加入 PATH，请重新执行：.\install.ps1 -AddPath"
+} else {
+    Write-Output "请重新打开 PowerShell / Windows Terminal 后使用快捷命令。"
+}
