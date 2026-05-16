@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Provider Profiles — 快速入口脚本。
+    AI CLI Switcher — 快速入口脚本。
 .DESCRIPTION
     在开发环境中直接使用，无需运行 install.ps1。
     提供同步快捷命令、启动 Web 管理台、查看状态等功能。
@@ -129,7 +129,7 @@ switch ($Action) {
     }
 
     'help' {
-        Write-Header "Provider Profiles — 帮助"
+        Write-Header "AI CLI Switcher — 帮助"
         Write-Output "用法：.\init.ps1 <command>"
         Write-Output ""
         Write-Output "  check   检查环境依赖"
@@ -146,7 +146,7 @@ switch ($Action) {
     }
 
     default {
-        Write-Header "Provider Profiles"
+        Write-Header "AI CLI Switcher"
         $tools = Get-ProviderTools
         Write-Output "已注册工具："
         foreach ($entry in $tools.GetEnumerator() | Sort-Object Name) {

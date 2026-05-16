@@ -1,18 +1,18 @@
-# Provider Profiles
+# AI CLI Switcher
 
-**Multi-provider switcher for AI CLI tools. Run different providers in different terminals — simultaneously, with zero pollution.**
+**Universal multi-provider switcher for AI CLI tools. One platform, every tool, zero interference.**
 
 | Tool | Prefix | CLI | Status |
 |------|--------|-----|--------|
-| **Claude Code** | `ccp` | `claude` | Stable |
-| **Codex CLI** | `cdp` | `codex` | Stable |
-| OpenCode | `ocp` | `opencode` | [Planned](#developer-guide-adding-a-new-tool) |
+| **Claude Code** | `ccp` | Claude Code | Stable |
+| **Codex CLI** | `cdp` | Codex CLI | Stable |
+| `ocp` | OpenCode | [Planned](#developer-guide-adding-a-new-tool) |
 
 > Windows-only · PowerShell 5.1+ · MIT License
 
 ---
 
-## Why Provider Profiles?
+## Why AI CLI Switcher?
 
 Running multiple AI CLI tools across different providers is painful:
 
@@ -20,7 +20,7 @@ Running multiple AI CLI tools across different providers is painful:
 - Different terminals interfere with each other through shared environment variables
 - Each tool has its own config format, its own key management, its own quirks
 
-**Provider Profiles** solves this with a single `ccp-mi` or `cdp-ds` command. Each terminal session gets its own isolated provider configuration. Exit the session, and everything is restored — no traces left.
+**AI CLI Switcher** unifies every AI CLI under one architecture. Three equal commands — `ccp` (Claude Code), `cdp` (Codex CLI), `ocp` (OpenCode) — same pattern, same power. One command like `ccp-mi` or `cdp-ds` and your terminal gets an isolated provider. Exit, and everything is restored. No traces.
 
 ```
 Terminal 1:  ccp-mi    → Xiaomi MiMo (Claude Code)
@@ -37,7 +37,7 @@ Terminal 4:  cdp-ds    → DeepSeek    (Codex CLI)
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        Bin Shims                             │
-│     ccp / ccp-mi          cdp / cdp-mi          (future)    │
+│    ccp (Claude Code)    cdp (Codex CLI)    ocp (OpenCode)   │
 └─────────┬────────────────────┬─────────────────────┬────────┘
           │                    │                     │
           ▼                    ▼                     ▼
@@ -167,7 +167,7 @@ cdp-manager                  # Web UI for Codex providers
 
 ## Usage Reference
 
-Both tools follow the **exact same command pattern** — only the prefix differs.
+All tools follow the **exact same command pattern** — only the prefix differs.
 
 ### Claude Code (`ccp`)
 

@@ -1,8 +1,8 @@
-# Provider Profiles — 安装包
+# AI CLI Switcher — 安装包
 
-一键切换 AI CLI 供应商，多终端同时运行不同供应商互不干扰。
+统一的 AI CLI 多供应商切换平台。一个架构，覆盖 Claude Code、Codex CLI 及未来所有 AI 工具。
 
-支持 **Claude Code** (`ccp`) 和 **Codex CLI** (`cdp`)，两者共享同一核心架构，命令体系完全对等。
+`ccp` (Claude Code) / `cdp` (Codex CLI) / `ocp` (OpenCode, 即将支持) — 三者共享同一核心模块，命令体系完全对等。
 
 > Windows-only · PowerShell 5.1+ · 不含真实 API Key
 
