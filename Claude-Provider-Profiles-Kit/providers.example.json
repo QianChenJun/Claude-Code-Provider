@@ -4,10 +4,14 @@
     "mi": {
       "displayName": "Xiaomi MiMo",
       "shortcut": "mi-claude",
-      "baseUrl": "https://example.com/anthropic",
+      "baseUrl": "https://your-mi-endpoint.example/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "MI_CLAUDE_API_KEY",
       "apiKey": "",
+      "model": "",
+      "haikuModel": "",
+      "sonnetModel": "",
+      "opusModel": "",
       "extraEnv": {
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
       }
@@ -15,17 +19,23 @@
     "ds": {
       "displayName": "DeepSeek",
       "shortcut": "ds-claude",
-      "baseUrl": "https://example.com/anthropic",
+      "baseUrl": "https://api.deepseek.com/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "DS_CLAUDE_API_KEY",
       "apiKey": "",
-      "model": "deepseek-model-name",
-      "haikuModel": "deepseek-haiku-model-name",
-      "sonnetModel": "deepseek-sonnet-model-name",
-      "opusModel": "deepseek-opus-model-name",
-      "extraEnv": {
-        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
-      }
+      "model": "deepseek-chat",
+      "haikuModel": "deepseek-chat",
+      "sonnetModel": "deepseek-chat",
+      "opusModel": "deepseek-chat"
+    },
+    "openrouter": {
+      "displayName": "OpenRouter",
+      "shortcut": "openrouter-claude",
+      "baseUrl": "https://openrouter.ai/api/v1/anthropic",
+      "authEnv": "ANTHROPIC_AUTH_TOKEN",
+      "apiKeyEnv": "OPENROUTER_CLAUDE_API_KEY",
+      "apiKey": "",
+      "model": "anthropic/claude-sonnet-4-6"
     }
   }
 }
