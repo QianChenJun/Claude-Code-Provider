@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   lint-powershell:
@@ -19,15 +20,16 @@ jobs:
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
 
-      - name: Lint .ps1 files
+      - name: Lint PowerShell files (.ps1 + .psm1)
         shell: pwsh
         run: |
-          $scripts = Get-ChildItem -Recurse -Filter '*.ps1' |
+          $scripts = Get-ChildItem -Recurse -Include '*.ps1','*.psm1' |
             Where-Object { $_.FullName -notlike '*node_modules*' }
           if ($scripts.Count -eq 0) {
-            Write-Output 'No .ps1 files found, skipping.'
+            Write-Output 'No PowerShell files found, skipping.'
             exit 0
           }
+          Write-Output "Checking $($scripts.Count) file(s)..."
           $results = $scripts | ForEach-Object {
             Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error')
           }
@@ -59,4 +61,4 @@ jobs:
             echo "Checking $f"
             node --check "$f"
           done
-          echo "All files OK."
+          echo "All $($files.Count) file(s) OK."
