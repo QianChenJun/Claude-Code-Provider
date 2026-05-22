@@ -179,7 +179,7 @@ function Resolve-ApiKey {
     }
 
     if (-not $apiKey) {
-        throw "配置 '$ProfileId' 缺少 apiKey。请在 providers.json 中设置 apiKey，或配置 apiKeyEnv/apiKeyFile。"
+        throw "配置 '$ProfileId' 缺少 apiKey（检查了: apiKey 字段、apiKeyEnv='$apiKeyEnv'、apiKeyFile='$apiKeyFile'）。请在 providers.json 中设置 apiKey、apiKeyEnv 或 apiKeyFile。"
     }
 
     return $apiKey
@@ -278,7 +278,7 @@ function Select-ProfileFromMenu {
         if ($choice -match '^\d+$') {
             $index = [int]$choice - 1
             if ($index -ge 0 -and $index -lt $entries.Count) { return $entries[$index].Name }
-            Write-Warning "无效选择：$choice"
+            Write-Warning "无效选择：$choice（请输入编号、配置 ID，或 L/S/M/H/Q）"
             continue
         }
 
@@ -303,7 +303,7 @@ function Select-ProfileFromMenu {
         }
 
         if ($Profiles.ContainsKey($choice)) { return $choice }
-        Write-Warning "未知选择：$choice"
+        Write-Warning "未知选择：$choice（可用配置 ID：$(($entries | ForEach-Object { $_.Name }) -join ', ')）"
     }
 }
 

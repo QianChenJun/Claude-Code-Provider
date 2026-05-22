@@ -1,3 +1,6 @@
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
 <#
 .SYNOPSIS
     Bootstrap helper — 定位并导入 ProviderCore.psm1。

@@ -3,14 +3,12 @@
   "profiles": {
     "mi": {
       "displayName": "Xiaomi MiMo",
-      "shortcut": "mi-codex",
       "baseUrl": "https://your-mi-endpoint.example/v1",
       "apiKeyEnv": "MI_CODEX_API_KEY",
       "model": "claude-sonnet-4-6"
     },
     "ds": {
       "displayName": "DeepSeek",
-      "shortcut": "ds-codex",
       "baseUrl": "https://api.deepseek.com",
       "apiKeyEnv": "DS_CODEX_API_KEY",
       "model": "deepseek-chat",
@@ -18,14 +16,12 @@
     },
     "openrouter": {
       "displayName": "OpenRouter",
-      "shortcut": "openrouter-codex",
       "baseUrl": "https://openrouter.ai/api/v1",
       "apiKeyEnv": "OPENROUTER_CODEX_API_KEY",
       "model": "anthropic/claude-sonnet-4-6"
     },
     "azure": {
       "displayName": "Azure OpenAI",
-      "shortcut": "azure-codex",
       "baseUrl": "https://your-resource.openai.azure.com/openai",
       "apiKeyEnv": "AZURE_CODEX_API_KEY",
       "model": "gpt-4.1",

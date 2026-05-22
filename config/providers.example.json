@@ -3,7 +3,6 @@
   "profiles": {
     "mi": {
       "displayName": "Xiaomi MiMo",
-      "shortcut": "mi-claude",
       "baseUrl": "https://your-mi-endpoint.example/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "MI_CLAUDE_API_KEY",
@@ -18,7 +17,6 @@
     },
     "ds": {
       "displayName": "DeepSeek",
-      "shortcut": "ds-claude",
       "baseUrl": "https://api.deepseek.com/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "DS_CLAUDE_API_KEY",
@@ -30,7 +28,6 @@
     },
     "openrouter": {
       "displayName": "OpenRouter",
-      "shortcut": "openrouter-claude",
       "baseUrl": "https://openrouter.ai/api/v1/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "OPENROUTER_CLAUDE_API_KEY",
