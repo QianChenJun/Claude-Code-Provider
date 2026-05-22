@@ -158,7 +158,8 @@ function Resolve-ApiKey {
         [Parameter(Mandatory)][string]$ProfileId
     )
 
-    $apiKey    = Get-ProfileValue -Map $Profile -Names @('apiKey', 'token', 'key')
+    $apiKey       = Get-ProfileValue -Map $Profile -Names @('apiKey', 'token', 'key')
+    $apiKeySource = if ($apiKey) { 'config' } else { 'none' }
     $apiKeyEnv = Get-ProfileValue -Map $Profile -Names @('apiKeyEnv', 'tokenEnv', 'keyEnv')
     $apiKeyFile = Get-ProfileValue -Map $Profile -Names @('apiKeyFile', 'tokenFile', 'keyFile')
 
@@ -166,7 +167,7 @@ function Resolve-ApiKey {
         $fromEnv = [Environment]::GetEnvironmentVariable($apiKeyEnv, 'User')
         if (-not $fromEnv) { $fromEnv = [Environment]::GetEnvironmentVariable($apiKeyEnv, 'Process') }
         if (-not $fromEnv) { $fromEnv = [Environment]::GetEnvironmentVariable($apiKeyEnv, 'Machine') }
-        if ($fromEnv) { $apiKey = $fromEnv }
+        if ($fromEnv) { $apiKey = $fromEnv; $apiKeySource = 'env' }
     }
 
     if ($apiKeyFile) {
@@ -175,6 +176,7 @@ function Resolve-ApiKey {
             $apiKey = ([System.Text.Encoding]::UTF8.GetString(
                 [System.IO.File]::ReadAllBytes($expandedKeyFile)
             )).Trim()
+            $apiKeySource = 'file'
         }
     }
 
@@ -182,6 +184,9 @@ function Resolve-ApiKey {
         throw "配置 '$ProfileId' 缺少 apiKey（检查了: apiKey 字段、apiKeyEnv='$apiKeyEnv'、apiKeyFile='$apiKeyFile'）。请在 providers.json 中设置 apiKey、apiKeyEnv 或 apiKeyFile。"
     }
 
+    if ($apiKeySource -eq 'config') {
+        Write-Warning "配置 '$ProfileId' 使用了明文 apiKey 字段，建议迁移到 apiKeyEnv 环境变量以提升安全性。操作: 1) 设置环境变量 2) 将 providers.json 中的 apiKey 替换为 apiKeyEnv"
+    }
     return $apiKey
 }
 

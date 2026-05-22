@@ -237,6 +237,14 @@ function collectConfig() {
     if (profiles[id]) throw new Error(`配置 ID 重复：${id}`);
 
     const profile = collectProfileFromCard(card);
+    // 校验必填字段
+    if (!profile.baseUrl) {
+      throw new Error(`${id}: baseUrl（接口地址）不能为空`);
+    }
+    if (!/^https?:\/\/.+/.test(profile.baseUrl)) {
+      throw new Error(`${id}: baseUrl 格式不合法，必须以 http:// 或 https:// 开头`);
+    }
+
     const cmdNames = [profile.shortcut || `${id}-${meta.suffix}`, `${meta.prefix}-${id}`];
 
     for (const cmd of cmdNames) {
