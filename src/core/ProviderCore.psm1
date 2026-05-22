@@ -58,9 +58,8 @@ function Convert-JsonObjectToHashtable {
         return $items
     }
 
-    if ($Value.PSObject -and
-        $Value.PSObject.Properties.Count -gt 0 -and
-        $Value.GetType().Name -eq 'PSCustomObject') {
+    if ($Value.GetType().Name -eq 'PSCustomObject' -and
+        @($Value.PSObject.Properties).Count -gt 0) {
         $map = @{}
         foreach ($prop in $Value.PSObject.Properties) {
             $map[$prop.Name] = Convert-JsonObjectToHashtable -Value $prop.Value
@@ -257,7 +256,8 @@ function Select-ProfileFromMenu {
         for ($i = 0; $i -lt $entries.Count; $i++) {
             $id      = $entries[$i].Name
             $profile = $entries[$i].Value
-            $name    = if ($profile.displayName) { $profile.displayName } else { $id }
+            $name    = $(Get-ProfileValue -Map $profile -Names @('displayName'))
+            if (-not $name) { $name = $id }
             Write-Host ("  {0}. {1,-18} {2}" -f ($i + 1), "$prefix-$id", $name)
         }
 
@@ -588,20 +588,31 @@ exit `$LASTEXITCODE
 
     Write-Output "已同步：$prefix / $prefix-list / $prefix-sync / $prefix-manager"
 
-    foreach ($prop in $config.profiles.PSObject.Properties) {
-        $id      = $prop.Name
-        $profile = Convert-JsonObjectToHashtable -Value $prop.Value
+    foreach ($entry in $config.profiles.GetEnumerator()) {
+        $id      = $entry.Key
+        $profile = $entry.Value
 
         if ($reservedProfileIds.Contains($id.ToLowerInvariant())) {
             throw "配置 ID 与内置菜单命令冲突：$id"
         }
         Assert-ShortcutName -Name $id
 
-        $shortcut = if ($profile.shortcut) { $profile.shortcut } else { "$id-$suffix" }
-        Register-ShortcutName -Name $shortcut -Owner $id
+        $shortcut = Get-ProfileValue -Map $profile -Names @('shortcut')
+        if (-not $shortcut) { $shortcut = "$id-$suffix" }
+        # 注册 shortcut（如 mi-claude），与 legacy 命令重名时跳过
+        if (-not $usedShortcutNames.Contains($shortcut.ToLowerInvariant())) {
+            Register-ShortcutName -Name $shortcut -Owner $id
+        }
 
         $prefixedCmd = "$prefix-$id"
-        Register-ShortcutName -Name $prefixedCmd -Owner $id
+        if (-not $usedShortcutNames.Contains($prefixedCmd.ToLowerInvariant())) {
+            Register-ShortcutName -Name $prefixedCmd -Owner $id
+        }
+
+        # 配置 ID 直呼快捷命令（如 mi / ds / gpt），配置 ID 唯一，无需前后缀
+        if (-not $usedShortcutNames.Contains($id.ToLowerInvariant())) {
+            Register-ShortcutName -Name $id -Owner $id
+        }
 
         $shortcutContent = @"
 #!/usr/bin/env pwsh
@@ -611,8 +622,9 @@ exit `$LASTEXITCODE
 
         Write-Shim -Path (Join-Path $binDir "$shortcut.ps1") -Content $shortcutContent
         Write-Shim -Path (Join-Path $binDir "$prefixedCmd.ps1") -Content $shortcutContent
+        Write-Shim -Path (Join-Path $binDir "$id.ps1") -Content $shortcutContent
 
-        Write-Output "已同步：$shortcut / $prefixedCmd"
+        Write-Output "已同步：$id / $shortcut / $prefixedCmd"
     }
 
     # Clean up stale shortcuts
