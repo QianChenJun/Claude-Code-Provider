@@ -42,7 +42,7 @@ function Convert-JsonObjectToHashtable {
     if ($null -eq $Value) { return $null }
 
     if ($Value -is [System.Collections.IDictionary]) {
-        $map = @{}
+        $map = [ordered]@{}
         foreach ($key in $Value.Keys) {
             $map[$key] = Convert-JsonObjectToHashtable -Value $Value[$key]
         }
@@ -60,7 +60,7 @@ function Convert-JsonObjectToHashtable {
 
     if ($Value.GetType().Name -eq 'PSCustomObject' -and
         @($Value.PSObject.Properties).Count -gt 0) {
-        $map = @{}
+        $map = [ordered]@{}
         foreach ($prop in $Value.PSObject.Properties) {
             $map[$prop.Name] = Convert-JsonObjectToHashtable -Value $prop.Value
         }
