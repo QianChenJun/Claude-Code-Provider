@@ -1,208 +1,227 @@
 # AI CLI Switcher
 
-**Universal multi-provider switcher for AI CLI tools. One platform, every tool, zero interference.**
+**通用 AI CLI 多供应商切换器。一个平台，所有工具，零干扰。**
 
-| Tool | Prefix | CLI | Status |
+| 工具 | 前缀 | CLI | 状态 |
 |------|--------|-----|--------|
-| **Claude Code** | `ccp` | Claude Code | Stable |
-| **Codex CLI** | `cdp` | Codex CLI | Stable |
-| `ocp` | OpenCode | [Planned](#developer-guide-adding-a-new-tool) |
+| **Claude Code** | `ccp` | Claude Code | 稳定 |
+| **Codex CLI** | `cdp` | Codex CLI | 稳定 |
+| `ocp` | OpenCode | [计划中](#开发者指南添加新工具) |
 
-> Windows-only · PowerShell 5.1+ · MIT License
-
----
-
-## Why AI CLI Switcher?
-
-Running multiple AI CLI tools across different providers is painful:
-
-- Switching providers means editing config files by hand
-- Different terminals interfere with each other through shared environment variables
-- Each tool has its own config format, its own key management, its own quirks
-
-**AI CLI Switcher** unifies every AI CLI under one architecture. Three equal commands — `ccp` (Claude Code), `cdp` (Codex CLI), `ocp` (OpenCode) — same pattern, same power. One command like `ccp-mi` or `cdp-ds` and your terminal gets an isolated provider. Exit, and everything is restored. No traces.
-
-```
-Terminal 1:  ccp-mi    → Xiaomi MiMo (Claude Code)
-Terminal 2:  ccp-ds    → DeepSeek    (Claude Code)
-Terminal 3:  cdp-mi    → Xiaomi MiMo (Codex CLI)
-Terminal 4:  cdp-ds    → DeepSeek    (Codex CLI)
-              ↑ all running concurrently, zero interference
-```
+> 仅限 Windows · PowerShell 5.1+ · MIT License
 
 ---
 
-## Architecture
+## 解决什么问题
+
+同时使用多个 AI CLI 工具和供应商非常痛苦：
+
+- 切换供应商意味着手动改配置文件
+- 不同终端窗口通过共享环境变量互相干扰
+- 每个工具有自己的配置格式、密钥管理和各种怪癖
+
+**AI CLI Switcher** 将每款 AI CLI 统一到一套架构下。三条平等命令 — `ccp`（Claude Code）、`cdp`（Codex CLI）、`ocp`（OpenCode）— 同样的模式、同样的能力。一条命令如 `ccp mi` 或 `cdp ds`，你的终端就获得了隔离的供应商环境。退出即恢复，不留痕迹。
+
+```
+终端 1:  ccp mi    → 小米 MiMo（Claude Code）
+终端 2:  ccp ds    → DeepSeek（Claude Code）
+终端 3:  cdp mi    → 小米 MiMo（Codex CLI）
+终端 4:  cdp ds    → DeepSeek（Codex CLI）
+          ↑ 全部同时运行，互不干扰
+```
+
+---
+
+## 架构
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        Bin Shims                             │
-│    ccp (Claude Code)    cdp (Codex CLI)    ocp (OpenCode)   │
+│                     Bin Shims（快捷命令）                      │
+│     ccp（Claude Code）   cdp（Codex CLI）  ocp（OpenCode）    │
 └─────────┬────────────────────┬─────────────────────┬────────┘
           │                    │                     │
           ▼                    ▼                     ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                  Tool Invoke Scripts (~40 lines each)         │
-│      Invoke-ClaudeProvider        Invoke-CodexProvider        │
+│              工具 Wrapper（~3 行，设 $ToolName）               │
+│      Invoke-ClaudeProvider      Invoke-CodexProvider          │
+└─────────┬────────────────────┬───────────────────────────────┘
+          │                    │
+          ▼                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│              通用脚本（dot-source 模式）                        │
+│   Invoke-Provider.ps1   Sync-Shortcuts.ps1   Manage-Prov...  │
 └─────────┬────────────────────┬───────────────────────────────┘
           │                    │
           ▼                    ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   ProviderCore.psm1                           │
 │  ┌────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │ JSON / TOML│  │ Env Session  │  │ Interactive Menu     │  │
-│  │ Utilities  │  │ Isolation    │  │ Validation / Sync    │  │
+│  │ JSON/TOML  │  │  环境变量    │  │  交互菜单 / 校验     │  │
+│  │ 工具函数   │  │  会话隔离    │  │  快捷命令同步        │  │
 │  └────────────┘  └──────────────┘  └──────────────────────┘  │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────────┐│
-│  │  Tool Registry  (Register-ProviderTool / Get-ProviderTool)││
+│  │  工具注册表（Register-ProviderTool / Get-ProviderTool）   ││
 │  └──────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌──────────────────────────────────────────────────────────────┐
-│           Unified Web Management (server.mjs)                │
-│          Tabbed UI: Claude Code  |  Codex CLI                 │
-│               http://127.0.0.1:15722/                        │
+│           统一 Web 管理界面（server.mjs）                      │
+│          标签页：Claude Code | Codex CLI                      │
+│               http://127.0.0.1:15723/                        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The core handles **what** is common. Each tool defines only **how** to launch its CLI.
+核心模块处理**共性**，每个工具只定义**如何启动**其 CLI。
 
 ---
 
-## Repository Structure
+## 目录结构
 
 ```
 .
 ├── src/
 │   ├── core/
-│   │   └── ProviderCore.psm1            # Shared core module (all logic)
+│   │   └── ProviderCore.psm1               # 共享核心模块（全部逻辑）
 │   ├── tools/
-│   │   ├── Import-Core.ps1              # Bootstrap: locate & import core
+│   │   ├── Import-Core.ps1                 # 引导：定位并导入核心模块
+│   │   ├── Invoke-Provider.ps1             # [通用] 供应商启动器
+│   │   ├── Sync-Shortcuts.ps1              # [通用] 快捷命令同步
+│   │   ├── Manage-ProviderUI.ps1           # [通用] Web 管理界面启动
 │   │   ├── claude/
-│   │   │   ├── Invoke-ClaudeProvider.ps1  # Claude launcher (thin wrapper)
-│   │   │   ├── Sync-ClaudeShortcuts.ps1   # Shortcut sync
-│   │   │   └── Manage-ClaudeUI.ps1        # Web manager launcher
+│   │   │   ├── Invoke-ClaudeProvider.ps1   # Wrapper（3 行）
+│   │   │   ├── Sync-ClaudeShortcuts.ps1    # Wrapper（3 行）
+│   │   │   └── Manage-ClaudeUI.ps1         # Wrapper（5 行）
 │   │   └── codex/
-│   │       ├── Invoke-CodexProvider.ps1   # Codex launcher (thin wrapper)
-│   │       ├── Sync-CodexShortcuts.ps1    # Shortcut sync
-│   │       └── Manage-CodexUI.ps1         # Web manager launcher
+│   │       ├── Invoke-CodexProvider.ps1    # Wrapper（3 行）
+│   │       ├── Sync-CodexShortcuts.ps1     # Wrapper（3 行）
+│   │       └── Manage-CodexUI.ps1          # Wrapper（5 行）
 │   ├── web/
-│   │   ├── index.html                   # Tabbed management UI
-│   │   ├── app.js                       # Frontend logic
-│   │   └── styles.css                   # Shared styles
-│   └── server.mjs                       # Unified HTTP server
+│   │   ├── index.html                      # 标签页管理界面
+│   │   ├── app.js                          # 前端逻辑
+│   │   └── styles.css                      # 样式
+│   └── server.mjs                          # 统一 HTTP 服务
 │
 ├── config/
-│   ├── providers.example.json           # Claude config template
-│   └── codex-providers.example.json     # Codex config template
+│   ├── providers.example.json              # Claude 配置模板
+│   └── codex-providers.example.json        # Codex 配置模板
 │
-├── Claude-Provider-Profiles-Kit/        # Distribution kit (for zip release)
-│   ├── install.ps1                      # Installer script
-│   ├── README.md                        # User documentation
-│   └── *.example.json                   # Config templates
+├── Claude-Provider-Profiles-Kit/           # 分发包（用于 zip 发布）
+│   ├── install.ps1                         # 安装脚本
+│   ├── README.md                           # 用户文档
+│   └── *.example.json                      # 配置模板
 │
-├── .codex/                              # Project-level Codex hooks
-│   ├── hooks/                           # Encryption-environment guards
-│   └── tools/Read-PlainText.ps1         # E-SafeNet-safe file reader
+├── .github/workflows/
+│   ├── ci.yml                              # 代码检查（PSScriptAnalyzer + JS 语法）
+│   └── release.yml                         # 打包 zip + GitHub Release
 │
-└── .github/workflows/
-    ├── ci.yml                           # Lint (PSScriptAnalyzer + JS syntax)
-    └── release.yml                      # Package zip + GitHub Release
+└── OPTIMIZATION.md                         # 可优化项清单及进度
 ```
 
 ---
 
-## Quick Start
+## 快速开始
 
-### Install
+### 安装
 
 ```powershell
-# From zip (colleagues): download Claude-Provider-Profiles-Kit.zip from Releases
+# 从 zip 安装（同事分发）：从 Releases 下载 Claude-Provider-Profiles-Kit.zip
 cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 
-# From source (developers):
+# 从源码安装（开发者）：
 git clone https://github.com/QianChenJun/Claude-Provider-Profiles.git
 cd Claude-Provider-Profiles\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 ```
 
-Restart your terminal.
+重启终端。
 
-### Configure API Keys
+### 配置 API Key
 
 ```powershell
-# Claude Code providers
-[Environment]::SetEnvironmentVariable('MI_CLAUDE_API_KEY', 'your-mi-key', 'User')
-[Environment]::SetEnvironmentVariable('DS_CLAUDE_API_KEY', 'your-ds-key', 'User')
+# Claude Code 供应商
+[Environment]::SetEnvironmentVariable('MI_CLAUDE_API_KEY', '你的小米key', 'User')
+[Environment]::SetEnvironmentVariable('DS_CLAUDE_API_KEY', '你的DeepSeek key', 'User')
 
-# Codex CLI providers
-[Environment]::SetEnvironmentVariable('MI_CODEX_API_KEY', 'your-mi-key', 'User')
-[Environment]::SetEnvironmentVariable('DS_CODEX_API_KEY', 'your-ds-key', 'User')
+# Codex CLI 供应商
+[Environment]::SetEnvironmentVariable('MI_CODEX_API_KEY', '你的小米key', 'User')
+[Environment]::SetEnvironmentVariable('DS_CODEX_API_KEY', '你的DeepSeek key', 'User')
 ```
 
-Restart terminal after setting.
+设置后重启终端。
 
-### Use
+### 使用
 
 ```powershell
 # Claude Code
-ccp-mi                       # Launch Claude with Xiaomi MiMo
-ccp-ds                       # Launch Claude with DeepSeek
-ccp                          # Interactive menu
+ccp mi                    # 用小米 MiMo 启动 Claude
+ccp ds                    # 用 DeepSeek 启动 Claude
+ccp                       # 交互菜单
 
 # Codex CLI
-cdp-mi                       # Launch Codex with Xiaomi MiMo
-cdp-ds                       # Launch Codex with DeepSeek
-cdp                          # Interactive menu
+cdp mi                    # 用小米 MiMo 启动 Codex
+cdp ds                    # 用 DeepSeek 启动 Codex
+cdp                       # 交互菜单
 
-# Management
-ccp-manager                  # Web UI for Claude providers
-cdp-manager                  # Web UI for Codex providers
+# 管理
+ccp manager               # Claude 供应商 Web 管理界面
+cdp manager               # Codex 供应商 Web 管理界面
 ```
 
 ---
 
-## Usage Reference
+## 命令参考
 
-All tools follow the **exact same command pattern** — only the prefix differs.
+所有工具遵循**完全相同的命令模式**——只有前缀不同。
 
-### Claude Code (`ccp`)
-
-```powershell
-ccp                            # Interactive menu (pick a provider)
-ccp-mi                         # Direct launch: Xiaomi MiMo
-ccp-ds                         # Direct launch: DeepSeek
-ccp-mi --model claude-opus-4-7 # Override model for this session
-ccp-mi -p "Summarize this"     # Non-interactive mode
-ccp-list                       # List all configured providers
-ccp-sync                       # Regenerate shortcut commands
-ccp-manager                    # Open Web management UI
-```
-
-### Codex CLI (`cdp`)
+### Claude Code（`ccp`）
 
 ```powershell
-cdp                            # Interactive menu
-cdp-mi                         # Direct launch: Xiaomi MiMo
-cdp-ds                         # Direct launch: DeepSeek
-cdp-ds --model deepseek-chat   # Override model
-cdp-list                       # List all configured providers
-cdp-sync                       # Regenerate shortcut commands
-cdp-manager                    # Open Web management UI
+ccp                            # 交互菜单（选择供应商）
+ccp mi                         # 直接启动：小米 MiMo
+ccp ds                         # 直接启动：DeepSeek
+ccp mi --model claude-opus-4-7 # 本次覆盖模型
+ccp mi -p "总结一下"            # 非交互模式
+ccp list                       # 列出所有已配置供应商
+ccp sync                       # 重新生成快捷命令
+ccp manager                    # 打开 Web 管理界面
 ```
 
-### Interactive Menu
+### Codex CLI（`cdp`）
 
-When you run `ccp` or `cdp` without arguments, an interactive menu appears:
+```powershell
+cdp                            # 交互菜单
+cdp mi                         # 直接启动：小米 MiMo
+cdp ds                         # 直接启动：DeepSeek
+cdp ds --model deepseek-chat   # 本次覆盖模型
+cdp list                       # 列出所有已配置供应商
+cdp sync                       # 重新生成快捷命令
+cdp manager                    # 打开 Web 管理界面
+```
+
+### 快捷命令
+
+每个配置自动生成三种快捷命令（以 `mi` 为例）：
+
+```powershell
+mi              # 配置 ID 直呼（最简）
+mi-claude       # 后缀模式
+ccp mi          # 前缀模式
+```
+
+所有命令等价，任选其一即可。
+
+### 交互菜单
+
+不带参数运行 `ccp` 或 `cdp` 会显示交互菜单：
 
 ```
-Codex CLI Provider 配置
+Claude Code Provider 配置
 请选择配置：
-  1. cdp-ds                 DeepSeek
-  2. cdp-mi                 Xiaomi MiMo
+  1. ccp-ds                 DeepSeek
+  2. ccp-mi                 小米 MiMo
 
   L. 查看列表    S. 同步快捷命令    M. 打开管理页面    H. 帮助    Q. 退出
 输入编号或配置 ID:
@@ -210,27 +229,22 @@ Codex CLI Provider 配置
 
 ---
 
-## Configuration
+## 配置
 
 ### Claude Code
 
-File: `%USERPROFILE%\.claude\provider-profiles\providers.json`
+文件：`%USERPROFILE%\.claude\provider-profiles\providers.json`
 
 ```json
 {
   "version": 1,
   "profiles": {
     "mi": {
-      "displayName": "Xiaomi MiMo",
-      "shortcut": "mi-claude",
+      "displayName": "小米 MiMo",
       "baseUrl": "https://your-provider.com/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "MI_CLAUDE_API_KEY",
       "model": "claude-sonnet-4-6",
-      "haikuModel": "",
-      "sonnetModel": "",
-      "opusModel": "",
-      "cliModel": "",
       "extraEnv": {
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
       }
@@ -239,22 +253,22 @@ File: `%USERPROFILE%\.claude\provider-profiles\providers.json`
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `displayName` | Name shown in Web UI and menus |
-| `shortcut` | Legacy shortcut command (default: `<id>-claude`) |
-| `baseUrl` | Anthropic-compatible endpoint URL |
-| `authEnv` | Auth method: `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY` |
-| `apiKeyEnv` | Windows environment variable containing the API key |
-| `apiKeyFile` | Alternative: read key from a file |
-| `model` | Default model (`ANTHROPIC_MODEL` env var) |
-| `haikuModel` / `sonnetModel` / `opusModel` | Model family mapping overrides |
-| `cliModel` | Default `--model` CLI argument |
-| `extraEnv` | Additional environment variables (JSON object) |
+| 字段 | 说明 |
+|------|------|
+| `displayName` | Web UI 和菜单中显示的名称 |
+| `baseUrl` | Anthropic 兼容接口地址（必填） |
+| `authEnv` | 认证方式：`ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY` |
+| `apiKey` | 明文 API Key（不推荐，建议用 apiKeyEnv） |
+| `apiKeyEnv` | 存放 API Key 的 Windows 环境变量名（推荐） |
+| `apiKeyFile` | 从文件读取 Key 的路径 |
+| `model` | 默认模型（`ANTHROPIC_MODEL` 环境变量） |
+| `haikuModel` / `sonnetModel` / `opusModel` | 模型族映射覆盖 |
+| `cliModel` | 默认 `--model` CLI 参数 |
+| `extraEnv` | 额外环境变量（JSON 对象） |
 
 ### Codex CLI
 
-File: `%USERPROFILE%\.codex\provider-profiles\providers.json`
+文件：`%USERPROFILE%\.codex\provider-profiles\providers.json`
 
 ```json
 {
@@ -262,7 +276,6 @@ File: `%USERPROFILE%\.codex\provider-profiles\providers.json`
   "profiles": {
     "ds": {
       "displayName": "DeepSeek",
-      "shortcut": "ds-codex",
       "baseUrl": "https://api.deepseek.com",
       "apiKeyEnv": "DS_CODEX_API_KEY",
       "model": "deepseek-chat",
@@ -274,114 +287,99 @@ File: `%USERPROFILE%\.codex\provider-profiles\providers.json`
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `displayName` | Name shown in Web UI and menus |
-| `shortcut` | Legacy shortcut (default: `<id>-codex`) |
-| `baseUrl` | OpenAI-compatible endpoint URL |
-| `apiKeyEnv` / `apiKeyFile` | API key source |
-| `model` | Default model name |
-| `modelContextWindow` | Context window size |
+| 字段 | 说明 |
+|------|------|
+| `displayName` | Web UI 和菜单中显示的名称 |
+| `baseUrl` | OpenAI 兼容接口地址（必填） |
+| `apiKeyEnv` / `apiKeyFile` | API Key 来源 |
+| `model` | 默认模型名称 |
+| `modelContextWindow` | 上下文窗口大小 |
 | `modelReasoningEffort` | `high` / `xhigh` / `max` |
 | `modelReasoningSummary` | `auto` / `concise` |
 | `modelVerbosity` | `low` / `medium` / `high` |
 | `supportsWebsockets` | `true` / `false` |
-| `requestMaxRetries` | Max retries for requests |
-| `streamMaxRetries` | Max retries for streams |
-| `streamIdleTimeoutMs` | Stream idle timeout in ms |
-| `queryParams` | Extra URL query parameters (JSON object) |
-| `httpHeaders` | Extra HTTP headers (JSON object) |
-| `envHttpHeaders` | Headers sourced from env vars (JSON object) |
-| `extraEnv` | Additional environment variables (JSON object) |
+| `requestMaxRetries` | 请求最大重试次数 |
+| `streamMaxRetries` | 流式最大重试次数 |
+| `streamIdleTimeoutMs` | 流空闲超时（毫秒） |
+| `queryParams` | 额外 URL 查询参数（JSON 对象） |
+| `httpHeaders` | 额外 HTTP 头（JSON 对象） |
+| `envHttpHeaders` | 从环境变量取值的 HTTP 头（JSON 对象） |
+| `extraEnv` | 额外环境变量（JSON 对象） |
 
-### Adding a Provider
+### 添加供应商
 
-**Option A: Web UI** (recommended)
+**方式 A：Web UI（推荐）**
 
 ```powershell
-ccp-manager    # or cdp-manager
+ccp manager    # 或 cdp manager
 ```
 
-Click "新增配置", fill in the fields, click "保存并同步".
+点击"新增配置"，填写字段，点击"保存并同步"。
 
-**Option B: Manual**
+**方式 B：手动编辑**
 
-Edit the JSON file, then sync:
+编辑 JSON 文件，然后同步：
 
 ```powershell
-ccp-sync    # or cdp-sync
+ccp sync    # 或 cdp sync
 ```
 
 ---
 
-## Web Management
+## Web 管理界面
 
-A unified Web server provides tabbed management for all registered tools.
+统一 Web 服务为所有已注册工具提供标签页管理。
 
 ```powershell
-ccp-manager    # Starts on port 15723
-cdp-manager    # Starts on port 15724
+ccp manager    # 端口 15723 启动
+cdp manager    # 端口 15724 启动
 ```
 
-The server auto-detects if an instance is already running and reuses it.
+服务会自动检测已有实例并复用。
 
-Features:
-- Tabbed interface: switch between Claude Code and Codex CLI configs
-- Add / copy / delete provider profiles
-- Save and sync shortcut commands in one click
-- Validation of IDs, command names, and required fields
-- Collapsible profile cards with live preview
+功能：
+- 标签页切换：Claude Code 和 Codex CLI 配置独立管理
+- 新增 / 复制 / 删除供应商配置
+- 一键保存并同步快捷命令
+- ID、命令名、必填字段校验
+- 可折叠配置卡片 + 实时预览
 
-Requires [Node.js](https://nodejs.org/) 18+.
+需要 [Node.js](https://nodejs.org/) 18+。
 
 ---
 
-## Developer Guide: Adding a New Tool
+## 开发者指南：添加新工具
 
-The architecture follows the **Open-Closed Principle**: the core is closed for modification, open for extension. Adding a new AI CLI tool requires **zero changes to core logic**.
+架构遵循**开闭原则**：核心模块对修改关闭，对扩展开放。添加新 AI CLI 工具**零核心逻辑修改**。
 
-### Example: Adding `opencode` support
+### 示例：添加 `opencode` 支持
 
-**Step 1 — Create 3 thin wrapper scripts** (`src/tools/opencode/`):
+**步骤 1 — 创建 3 个 wrapper 脚本**（`src/tools/opencode/`）：
 
-**`Invoke-OpenCodeProvider.ps1`** (~40 lines):
+**`Invoke-OpenCodeProvider.ps1`**（3 行）：
 ```powershell
 #!/usr/bin/env pwsh
-$ErrorActionPreference = 'Stop'
-. (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tools\Import-Core.ps1')
-Import-ProviderCore
-
-$tool = Get-ProviderTool -Name 'opencode'
-$config = Read-JsonFile -Path $tool.configPath
-if (-not $config.ContainsKey('profiles')) { throw '配置文件必须包含 profiles 对象' }
-
-$profileId = $null; $remaining = @(); $showList = $false
-for ($i = 0; $i -lt $args.Count; $i++) {
-    $a = "$($args[$i])"
-    if ($a -in @('list','ls'))           { $showList = $true }
-    elseif ($a -in @('sync'))            { & $tool.syncScript; exit $LASTEXITCODE }
-    elseif ($a -in @('manager','manage')){ & $tool.manageScript; exit $LASTEXITCODE }
-    elseif (-not $a.StartsWith('-') -and -not $profileId) { $profileId = $a }
-    else { $remaining += $a }
-}
-if ($showList) { Write-ProfileTable -Profiles $config.profiles -Tool $tool; exit 0 }
-if (-not $profileId) {
-    $profileId = Select-ProfileFromMenu -Profiles $config.profiles -Tool $tool
-    if (-not $profileId) { exit 0 }
-}
-Invoke-ProviderSession -ToolName 'opencode' -ProfileId $profileId -RemainingArgs $remaining
+$ToolName = 'opencode'
+. "$PSScriptRoot\..\Invoke-Provider.ps1"
 ```
 
-**`Sync-OpenCodeShortcuts.ps1`** (~5 lines):
+**`Sync-OpenCodeShortcuts.ps1`**（3 行）：
 ```powershell
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Import-Core.ps1')
-Import-ProviderCore
-Sync-ToolShortcuts -ToolName 'opencode'
+#!/usr/bin/env pwsh
+$ToolName = 'opencode'
+. "$PSScriptRoot\..\Sync-Shortcuts.ps1"
 ```
 
-**`Manage-OpenCodeUI.ps1`** — same pattern as `Manage-ClaudeUI.ps1`.
+**`Manage-OpenCodeUI.ps1`**（5 行）：
+```powershell
+#!/usr/bin/env pwsh
+[CmdletBinding()]
+param([int]$Port = 0, [switch]$Foreground)
+$ToolName = 'opencode'
+. "$PSScriptRoot\..\Manage-ProviderUI.ps1"
+```
 
-**Step 2 — Register the tool** (add to `ProviderCore.psm1`):
+**步骤 2 — 注册工具**（在 `ProviderCore.psm1` 中添加）：
 
 ```powershell
 if (-not $script:ToolRegistry.ContainsKey('opencode')) {
@@ -399,7 +397,6 @@ if (-not $script:ToolRegistry.ContainsKey('opencode')) {
         manageScript          = (Join-Path $root 'src\tools\opencode\Manage-OpenCodeUI.ps1')
         launcher              = {
             param($Profile, $ApiKey, $ProfileId, $RemainingArgs, $Session)
-            # Build tool-specific launch args here
             return @{
                 LaunchArgs = @('--provider-url', $Profile.baseUrl) + $RemainingArgs
                 EnvVars    = @{ 'OPENCODE_API_KEY' = $ApiKey }
@@ -410,71 +407,72 @@ if (-not $script:ToolRegistry.ContainsKey('opencode')) {
 }
 ```
 
-**Step 3 — Add deployment** (append to `install.ps1`):
-```powershell
-# Deploy opencode files
-Copy-Item ... (same pattern as Claude/Codex sections)
-```
+**步骤 3 — 添加部署**（在 `install.ps1` 中添加 Copy-Item，参考已有 Claude/Codex 段）。
 
-**Step 4 — Add Web UI tab** (optional):
-Add `'opencode'` entry to `TOOL_META` in `src/web/app.js` and create a template in `index.html`.
+**步骤 4 — 添加 Web UI 标签**（可选）：在 `app.js` 的 `TOOL_META` 中添加 `opencode` 条目。
 
-**Total: ~50 lines of tool-specific code. Core: 0 changes.**
+**总计：~20 行业务代码。核心模块：0 行修改。**
 
 ---
 
-## Installation Layout
+## 安装布局
 
-After running `install.ps1`, files are deployed to:
+运行 `install.ps1` 后，文件部署至：
 
 ```
 %USERPROFILE%\
 ├── .claude\
 │   ├── provider-profiles\
-│   │   ├── providers.json              ← Your Claude provider configs
-│   │   ├── server.mjs                  ← Web server (shared code)
-│   │   ├── web/                        ← Web UI (shared code)
+│   │   ├── providers.json              ← Claude 供应商配置
+│   │   ├── server.mjs                  ← Web 服务（共享）
+│   │   ├── web/                        ← Web UI（共享）
 │   │   └── src\
-│   │       ├── core\ProviderCore.psm1  ← Core module
-│   │       ├── tools\Import-Core.ps1   ← Bootstrap
-│   │       └── tools\claude\           ← Claude scripts
-│   └── bin\                            ← ccp, ccp-*, *-claude shortcuts
+│   │       ├── core\ProviderCore.psm1  ← 核心模块
+│   │       ├── tools\Import-Core.ps1   ← 引导
+│   │       ├── tools\Invoke-Provider.ps1  ← 通用启动器
+│   │       ├── tools\Sync-Shortcuts.ps1   ← 通用同步
+│   │       ├── tools\Manage-ProviderUI.ps1← 通用管理 UI
+│   │       └── tools\claude\           ← Claude wrapper（3 行）
+│   └── bin\                            ← ccp, ccp-*, mi 等快捷命令
 │
 ├── .codex\
 │   ├── provider-profiles\
-│   │   ├── providers.json              ← Your Codex provider configs
-│   │   ├── server.mjs                  ← Web server (same code)
-│   │   ├── web/                        ← Web UI (same code)
+│   │   ├── providers.json              ← Codex 供应商配置
+│   │   ├── server.mjs                  ← Web 服务（同代码）
+│   │   ├── web/                        ← Web UI（同代码）
 │   │   └── src\
-│   │       ├── core\ProviderCore.psm1  ← Core module (same code)
+│   │       ├── core\ProviderCore.psm1  ← 核心模块（同代码）
 │   │       ├── tools\Import-Core.ps1
-│   │       └── tools\codex\            ← Codex scripts
-│   └── bin\                            ← cdp, cdp-*, *-codex shortcuts
+│   │       ├── tools\Invoke-Provider.ps1  ← 通用启动器
+│   │       ├── tools\Sync-Shortcuts.ps1
+│   │       ├── tools\Manage-ProviderUI.ps1
+│   │       └── tools\codex\            ← Codex wrapper（3 行）
+│   └── bin\                            ← cdp, cdp-*, mi 等快捷命令
 ```
 
-Both tools share identical core code but operate independently.
+两个工具共享相同的核心代码，但独立运行。
 
 ---
 
-## FAQ
+## 常见问题
 
-### Shortcut command not found
+### 快捷命令找不到
 
 ```powershell
 $env:Path -split ';' | Select-String '\.(claude|codex)\\bin'
-.\install.ps1 -AddPath   # Re-add to PATH, then restart terminal
+.\install.ps1 -AddPath   # 重新加入 PATH，然后重启终端
 ```
 
-### "Missing apiKey" error
+### 报错"缺少 apiKey"
 
 ```powershell
-$env:MI_CLAUDE_API_KEY    # Verify the variable exists
-# If just set, restart terminal
+$env:MI_CLAUDE_API_KEY    # 确认环境变量存在
+# 刚设置的话请重启终端
 ```
 
-### Model pollution between terminals
+### 终端间模型相互污染
 
-New scripts auto-clean on exit. If needed manually:
+新脚本退出时自动清理。如需手动清理：
 
 ```powershell
 Remove-Item Env:\ANTHROPIC_MODEL -ErrorAction SilentlyContinue
@@ -483,22 +481,23 @@ Remove-Item Env:\ANTHROPIC_DEFAULT_SONNET_MODEL -ErrorAction SilentlyContinue
 Remove-Item Env:\ANTHROPIC_DEFAULT_OPUS_MODEL -ErrorAction SilentlyContinue
 ```
 
-### Will this break after tool updates?
+### 工具更新后会出问题吗？
 
-No. Shortcuts call the original `claude` / `codex` binary. No installation files are modified.
+不会。快捷命令调用原始 `claude` / `codex` 二进制文件，不修改任何安装文件。
 
-### Can I use the same provider for both tools?
+### 可以在两个工具中使用同一个供应商吗？
 
-Yes, but each tool has its own config file. Copy the profile entry from one config to the other.
+可以，但每个工具有自己的配置文件。把一个 profile 从一份配置复制到另一份即可。
 
 ---
 
-## Security
+## 安全
 
-- Never commit real API keys to git.
-- Prefer `apiKeyEnv` (environment variable) over inline `apiKey`.
-- Installer does not overwrite existing `providers.json` unless `-OverwriteConfig` is specified.
-- Environment variables are scoped to the current process and cleaned up on exit.
+- 切勿将真实 API Key 提交到 git
+- 推荐使用 `apiKeyEnv`（环境变量）替代 `apiKey`
+- 程序检测到明文 `apiKey` 时会发出警告并引导迁移
+- 安装脚本不会覆盖已有 `providers.json`，除非指定 `-OverwriteConfig`
+- 环境变量限定当前进程，退出时清理
 
 ---
 

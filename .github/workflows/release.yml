@@ -57,6 +57,9 @@ jobs:
           for f in \
             src/core/ProviderCore.psm1 \
             src/tools/Import-Core.ps1 \
+            src/tools/Invoke-Provider.ps1 \
+            src/tools/Sync-Shortcuts.ps1 \
+            src/tools/Manage-ProviderUI.ps1 \
             src/tools/claude/Invoke-ClaudeProvider.ps1 \
             src/tools/codex/Invoke-CodexProvider.ps1 \
             src/server.mjs \

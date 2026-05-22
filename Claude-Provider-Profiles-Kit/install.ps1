@@ -65,6 +65,12 @@ foreach ($target in @($claudeRoot, $codexRoot)) {
               -Destination (Join-Path $target 'src\core\ProviderCore.psm1') -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Import-Core.ps1') `
               -Destination (Join-Path $target 'src\tools\Import-Core.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Invoke-Provider.ps1') `
+              -Destination (Join-Path $target 'src\tools\Invoke-Provider.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Sync-Shortcuts.ps1') `
+              -Destination (Join-Path $target 'src\tools\Sync-Shortcuts.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Manage-ProviderUI.ps1') `
+              -Destination (Join-Path $target 'src\tools\Manage-ProviderUI.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'server.mjs') `
               -Destination (Join-Path $target 'server.mjs') -Force
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\index.html') `
