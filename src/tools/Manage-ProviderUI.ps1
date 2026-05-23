@@ -6,10 +6,10 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $ToolName) { throw 'Internal error: $ToolName not set by wrapper script.' }
 
-$root     = Split-Path -Parent $PSScriptRoot
-$server   = Join-Path (Split-Path -Parent $root) 'server.mjs'
+$toolsDir = $PSScriptRoot
+$server   = Join-Path (Split-Path -Parent (Split-Path -Parent $toolsDir)) 'server.mjs'
 
-. (Join-Path $root 'Import-Core.ps1')
+. (Join-Path $toolsDir 'Import-Core.ps1')
 Import-ProviderCore
 
 $tool = Get-ProviderTool -Name $ToolName
@@ -25,7 +25,7 @@ function Get-ManagerState {
     try {
         $r = Invoke-RestMethod -Uri "http://127.0.0.1:$ProbePort/api/health" -Method Get -TimeoutSec 1
         if ($null -ne $r -and $r.ok -and $r.root) {
-            $expected = [System.IO.Path]::GetFullPath($root).TrimEnd('\\')
+            $expected = [System.IO.Path]::GetFullPath((Split-Path -Parent (Split-Path -Parent $toolsDir))).TrimEnd('\\')
             $actual   = [System.IO.Path]::GetFullPath("$($r.root)").TrimEnd('\\')
             if ($expected -ieq $actual) { return 'Current' }
             return 'Other'
@@ -57,7 +57,7 @@ if ($Foreground) {
 
 if ($state -eq 'Free') {
     $proc = Start-Process -FilePath 'node' -ArgumentList @($server, '--port', $selectedPort, '--tool', $ToolName) `
-        -WorkingDirectory (Split-Path -Parent $root) -WindowStyle Hidden -PassThru
+        -WorkingDirectory (Split-Path -Parent (Split-Path -Parent $toolsDir)) -WindowStyle Hidden -PassThru
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 200
