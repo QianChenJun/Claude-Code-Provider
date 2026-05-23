@@ -6,7 +6,6 @@
       "baseUrl": "https://your-mi-endpoint.example/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "MI_CLAUDE_API_KEY",
-      "apiKey": "",
       "model": "",
       "haikuModel": "",
       "sonnetModel": "",
@@ -20,7 +19,6 @@
       "baseUrl": "https://api.deepseek.com/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "DS_CLAUDE_API_KEY",
-      "apiKey": "",
       "model": "deepseek-chat",
       "haikuModel": "deepseek-chat",
       "sonnetModel": "deepseek-chat",
@@ -31,7 +29,6 @@
       "baseUrl": "https://openrouter.ai/api/v1/anthropic",
       "authEnv": "ANTHROPIC_AUTH_TOKEN",
       "apiKeyEnv": "OPENROUTER_CLAUDE_API_KEY",
-      "apiKey": "",
       "model": "anthropic/claude-sonnet-4-6"
     }
   }

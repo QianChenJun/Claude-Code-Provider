@@ -7,6 +7,7 @@
     提供同步快捷命令、启动 Web 管理台、查看状态等功能。
 .PARAMETER Action
     sync    — 为所有已注册工具生成快捷命令
+    setup   — 交互式新增或更新供应商配置
     web     — 启动统一 Web 管理台
     list    — 列出所有已注册工具及其配置
     check   — 检查环境（claude、codex、node 是否可用）
@@ -14,13 +15,14 @@
 .EXAMPLE
     .\init.ps1              # 默认：显示状态
     .\init.ps1 sync         # 同步快捷命令
+    .\init.ps1 setup        # 配置向导
     .\init.ps1 web          # 启动 Web 管理台
     .\init.ps1 check        # 检查环境
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('sync', 'web', 'list', 'check', 'help', '')]
+    [ValidateSet('sync', 'setup', 'web', 'list', 'check', 'help', '')]
     [string]$Action = ''
 )
 
@@ -114,6 +116,29 @@ switch ($Action) {
         }
     }
 
+    'setup' {
+        Write-Header "配置向导"
+
+        $tools = Get-ProviderTools
+        foreach ($entry in $tools.GetEnumerator() | Sort-Object Name) {
+            $t = $entry.Value
+            Write-Output "  $($t.commandPrefix)  $($t.displayName)"
+        }
+
+        Write-Output ""
+        $choice = (Read-Host "选择工具：[B]两个 / [C]Claude / [D]Codex / [Q]退出（默认 B）").Trim()
+        if (-not $choice) { $choice = 'B' }
+        if ($choice -match '^(q|quit|exit|退出)$') { return }
+
+        if ($choice -match '^(b|both|两个)$' -or $choice -match '^(c|claude|ccp)$') {
+            Invoke-ProviderSetup -ToolName 'claude'
+        }
+
+        if ($choice -match '^(b|both|两个)$' -or $choice -match '^(d|codex|cdp)$') {
+            Invoke-ProviderSetup -ToolName 'codex'
+        }
+    }
+
     'web' {
         $serverPath = Join-Path $repoRoot 'src\server.mjs'
         if (-not (Test-Path -LiteralPath $serverPath)) {
@@ -134,13 +159,14 @@ switch ($Action) {
         Write-Output ""
         Write-Output "  check   检查环境依赖"
         Write-Output "  list    列出已注册工具"
+        Write-Output "  setup   交互式新增或更新供应商配置"
         Write-Output "  sync    同步快捷命令到 bin 目录"
         Write-Output "  web     启动统一 Web 管理台"
         Write-Output "  help    显示此帮助"
         Write-Output ""
         Write-Output "快捷命令（同步后可用）："
-        Write-Output "  ccp / ccp-mi / ccp-ds / ccp-list / ccp-manager"
-        Write-Output "  cdp / cdp-mi / cdp-ds / cdp-list / cdp-manager"
+        Write-Output "  ccp / ccp setup / ccp mi / ccp list / ccp manager"
+        Write-Output "  cdp / cdp setup / cdp ds / cdp list / cdp manager"
         Write-Output ""
         Write-Output "详细文档：README.md"
     }
@@ -156,6 +182,7 @@ switch ($Action) {
         Write-Output ""
         Write-Output "快速命令："
         Write-Output "  .\init.ps1 check   检查环境"
+        Write-Output "  .\init.ps1 setup   配置向导"
         Write-Output "  .\init.ps1 sync    同步快捷命令"
         Write-Output "  .\init.ps1 web     启动 Web 管理台"
         Write-Output "  .\init.ps1 help    查看完整帮助"

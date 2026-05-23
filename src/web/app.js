@@ -45,7 +45,14 @@ const TOOL_META = {
 let currentTool = 'claude';
 let currentConfig = { version: 1, profiles: {} };
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
-const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage']);
+const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
+const reservedCommandNames = new Set([
+  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager',
+  'mi-claude', 'ds-claude', 'provider-claude', 'claude-profile-manager', 'sync-claude-profiles',
+  'mi-codex', 'ds-codex', 'provider-codex', 'codex-profile-manager', 'sync-codex-profiles'
+]);
+const legacyProfileCommandNames = new Set(['mi-claude', 'ds-claude', 'mi-codex', 'ds-codex']);
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -245,12 +252,21 @@ function collectConfig() {
       throw new Error(`${id}: baseUrl 格式不合法，必须以 http:// 或 https:// 开头`);
     }
 
-    const cmdNames = [profile.shortcut || `${id}-${meta.suffix}`, `${meta.prefix}-${id}`];
+    const shortcut = profile.shortcut || `${id}-${meta.suffix}`;
+    const allowLegacyShortcut = !profile.shortcut && legacyProfileCommandNames.has(shortcut.toLowerCase());
+    const cmdNames = [
+      { name: shortcut, allowLegacyProfileCommand: allowLegacyShortcut },
+      { name: `${meta.prefix}-${id}`, allowLegacyProfileCommand: false },
+      { name: id, allowLegacyProfileCommand: false }
+    ];
 
     for (const cmd of cmdNames) {
-      if (!profileIdPattern.test(cmd)) throw new Error(`${id}: 快捷命令不合法：${cmd}`);
-      const key = cmd.toLowerCase();
-      if (usedCmds.has(key)) throw new Error(`${id}: 快捷命令与 ${usedCmds.get(key)} 冲突：${cmd}`);
+      if (!profileIdPattern.test(cmd.name)) throw new Error(`${id}: 快捷命令不合法：${cmd.name}`);
+      const key = cmd.name.toLowerCase();
+      if (reservedCommandNames.has(key) && !(cmd.allowLegacyProfileCommand && legacyProfileCommandNames.has(key))) {
+        throw new Error(`${id}: 快捷命令与内置命令冲突：${cmd.name}`);
+      }
+      if (usedCmds.has(key)) throw new Error(`${id}: 快捷命令与 ${usedCmds.get(key)} 冲突：${cmd.name}`);
       usedCmds.set(key, id);
     }
     profiles[id] = profile;

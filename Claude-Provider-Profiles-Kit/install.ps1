@@ -9,7 +9,8 @@
 [CmdletBinding()]
 param(
     [switch]$OverwriteConfig,
-    [switch]$AddPath
+    [switch]$AddPath,
+    [switch]$Configure
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,8 +24,6 @@ if (-not (Test-Path -LiteralPath $sourceRoot)) {
 if (-not (Test-Path -LiteralPath $sourceRoot)) {
     throw "找不到 src 目录。请从项目根目录或解压后的 Kit 目录运行安装脚本。"
 }
-$encoding   = [System.Text.UTF8Encoding]::new($false)
-
 # === Target directories ===
 $claudeRoot = Join-Path $env:USERPROFILE '.claude\provider-profiles'
 $claudeBin  = Join-Path $env:USERPROFILE '.claude\bin'
@@ -43,6 +42,113 @@ if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
     Write-Warning "未找到 codex 命令。请先安装 Codex CLI。"
 }
 
+function Copy-RequiredFile {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "缺少安装文件：$Source"
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destination) | Out-Null
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+}
+
+function Deploy-SharedFiles {
+    param([Parameter(Mandatory)][string]$TargetRoot)
+
+    $files = @(
+        @{ Source = 'core\ProviderCore.psm1';      Destination = 'src\core\ProviderCore.psm1' },
+        @{ Source = 'tools\Import-Core.ps1';       Destination = 'src\tools\Import-Core.ps1' },
+        @{ Source = 'tools\Invoke-Provider.ps1';   Destination = 'src\tools\Invoke-Provider.ps1' },
+        @{ Source = 'tools\Sync-Shortcuts.ps1';    Destination = 'src\tools\Sync-Shortcuts.ps1' },
+        @{ Source = 'tools\Manage-ProviderUI.ps1'; Destination = 'src\tools\Manage-ProviderUI.ps1' },
+        @{ Source = 'server.mjs';                  Destination = 'server.mjs' },
+        @{ Source = 'web\index.html';              Destination = 'web\index.html' },
+        @{ Source = 'web\app.js';                  Destination = 'web\app.js' },
+        @{ Source = 'web\styles.css';              Destination = 'web\styles.css' }
+    )
+
+    foreach ($file in $files) {
+        Copy-RequiredFile `
+            -Source (Join-Path $sourceRoot $file.Source) `
+            -Destination (Join-Path $TargetRoot $file.Destination)
+    }
+}
+
+function Deploy-ToolFiles {
+    param(
+        [Parameter(Mandatory)][string]$ToolName,
+        [Parameter(Mandatory)][string]$TargetRoot,
+        [Parameter(Mandatory)][string[]]$Files
+    )
+
+    foreach ($file in $Files) {
+        Copy-RequiredFile `
+            -Source (Join-Path $sourceRoot "tools\$ToolName\$file") `
+            -Destination (Join-Path $TargetRoot "src\tools\$ToolName\$file")
+    }
+}
+
+function Initialize-ConfigFile {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$TargetPath,
+        [Parameter(Mandatory)][string]$TemplatePath,
+        [string]$LegacyPath
+    )
+
+    if ($OverwriteConfig) {
+        Copy-RequiredFile -Source $TemplatePath -Destination $TargetPath
+        Write-Output "已写入 $Name 配置：$TargetPath"
+        return
+    }
+
+    if (Test-Path -LiteralPath $TargetPath) {
+        Write-Output "保留已有 $Name 配置"
+        return
+    }
+
+    if ($LegacyPath -and (Test-Path -LiteralPath $LegacyPath)) {
+        Copy-RequiredFile -Source $LegacyPath -Destination $TargetPath
+        Write-Output "已从旧目录迁移 $Name 配置"
+        return
+    }
+
+    Copy-RequiredFile -Source $TemplatePath -Destination $TargetPath
+    Write-Output "已写入 $Name 配置模板"
+}
+
+function Ensure-UserPathItem {
+    param([Parameter(Mandatory)][string]$PathItem, [switch]$ShouldAdd)
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $items = if ($userPath) { $userPath -split ';' | Where-Object { $_ } } else { @() }
+    $exists = $items | Where-Object { $_.TrimEnd('\') -ieq $PathItem.TrimEnd('\') }
+    if ($exists) { return }
+    if ($ShouldAdd) {
+        [Environment]::SetEnvironmentVariable('Path', (($items + $PathItem) -join ';'), 'User')
+        Write-Output "已加入用户 PATH：$PathItem"
+    } else {
+        Write-Warning "快捷命令目录不在 PATH 中：$PathItem"
+    }
+}
+
+function Invoke-PostInstallConfigure {
+    $choice = (Read-Host "立即配置哪个工具？[B]两个 / [C]Claude / [D]Codex / [S]跳过（默认 B）").Trim()
+    if (-not $choice) { $choice = 'B' }
+
+    if ($choice -match '^(s|skip|跳过)$') { return }
+
+    if ($choice -match '^(b|both|两个)$' -or $choice -match '^(c|claude)$') {
+        & (Join-Path $claudeRoot 'src\tools\claude\Invoke-ClaudeProvider.ps1') setup
+    }
+
+    if ($choice -match '^(b|both|两个)$' -or $choice -match '^(d|codex)$') {
+        & (Join-Path $codexRoot 'src\tools\codex\Invoke-CodexProvider.ps1') setup
+    }
+}
+
 # === Create target directories ===
 foreach ($dir in @(
     (Join-Path $claudeRoot 'src\core'),
@@ -59,77 +165,39 @@ foreach ($dir in @(
 
 Write-Output "=== 部署核心模块 ==="
 
-# Deploy shared core module to both targets
 foreach ($target in @($claudeRoot, $codexRoot)) {
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'core\ProviderCore.psm1') `
-              -Destination (Join-Path $target 'src\core\ProviderCore.psm1') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Import-Core.ps1') `
-              -Destination (Join-Path $target 'src\tools\Import-Core.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Invoke-Provider.ps1') `
-              -Destination (Join-Path $target 'src\tools\Invoke-Provider.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Sync-Shortcuts.ps1') `
-              -Destination (Join-Path $target 'src\tools\Sync-Shortcuts.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\Manage-ProviderUI.ps1') `
-              -Destination (Join-Path $target 'src\tools\Manage-ProviderUI.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'server.mjs') `
-              -Destination (Join-Path $target 'server.mjs') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\index.html') `
-              -Destination (Join-Path $target 'web\index.html') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\app.js') `
-              -Destination (Join-Path $target 'web\app.js') -Force
-    Copy-Item -LiteralPath (Join-Path $sourceRoot 'web\styles.css') `
-              -Destination (Join-Path $target 'web\styles.css') -Force
+    Deploy-SharedFiles -TargetRoot $target
 }
 Write-Output "已部署核心模块"
 
 Write-Output "=== 部署 Claude Code 工具 ==="
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Invoke-ClaudeProvider.ps1') `
-          -Destination (Join-Path $claudeRoot 'src\tools\claude\Invoke-ClaudeProvider.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Sync-ClaudeShortcuts.ps1') `
-          -Destination (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\claude\Manage-ClaudeUI.ps1') `
-          -Destination (Join-Path $claudeRoot 'src\tools\claude\Manage-ClaudeUI.ps1') -Force
+Deploy-ToolFiles -ToolName 'claude' -TargetRoot $claudeRoot -Files @(
+    'Invoke-ClaudeProvider.ps1',
+    'Sync-ClaudeShortcuts.ps1',
+    'Manage-ClaudeUI.ps1'
+)
 
 Write-Output "=== 部署 Codex CLI 工具 ==="
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Invoke-CodexProvider.ps1') `
-          -Destination (Join-Path $codexRoot 'src\tools\codex\Invoke-CodexProvider.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Sync-CodexShortcuts.ps1') `
-          -Destination (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'tools\codex\Manage-CodexUI.ps1') `
-          -Destination (Join-Path $codexRoot 'src\tools\codex\Manage-CodexUI.ps1') -Force
+Deploy-ToolFiles -ToolName 'codex' -TargetRoot $codexRoot -Files @(
+    'Invoke-CodexProvider.ps1',
+    'Sync-CodexShortcuts.ps1',
+    'Manage-CodexUI.ps1'
+)
 
 Write-Output "=== 初始化配置文件 ==="
 
-# Claude config
 $claudeConfigPath = Join-Path $claudeRoot 'providers.json'
-if ($OverwriteConfig) {
-    Copy-Item -LiteralPath $claudeExampleCfg -Destination $claudeConfigPath -Force
-    Write-Output "已写入 Claude 配置：$claudeConfigPath"
-} elseif (Test-Path -LiteralPath $claudeConfigPath) {
-    Write-Output "保留已有 Claude 配置"
-} else {
-    # Try legacy migration
-    $legacyPath = Join-Path $env:USERPROFILE '.cc-switch\claude-profiles\providers.json'
-    if (Test-Path -LiteralPath $legacyPath) {
-        Copy-Item -LiteralPath $legacyPath -Destination $claudeConfigPath -Force
-        Write-Output "已从旧目录迁移 Claude 配置"
-    } else {
-        Copy-Item -LiteralPath $claudeExampleCfg -Destination $claudeConfigPath -Force
-        Write-Output "已写入 Claude 配置模板"
-    }
-}
+Initialize-ConfigFile `
+    -Name 'Claude' `
+    -TargetPath $claudeConfigPath `
+    -TemplatePath $claudeExampleCfg `
+    -LegacyPath (Join-Path $env:USERPROFILE '.cc-switch\claude-profiles\providers.json')
 
-# Codex config
 $codexConfigPath = Join-Path $codexRoot 'providers.json'
-if ($OverwriteConfig) {
-    Copy-Item -LiteralPath $codexExampleCfg -Destination $codexConfigPath -Force
-    Write-Output "已写入 Codex 配置：$codexConfigPath"
-} elseif (Test-Path -LiteralPath $codexConfigPath) {
-    Write-Output "保留已有 Codex 配置"
-} else {
-    Copy-Item -LiteralPath $codexExampleCfg -Destination $codexConfigPath -Force
-    Write-Output "已写入 Codex 配置模板"
-}
+Initialize-ConfigFile `
+    -Name 'Codex' `
+    -TargetPath $codexConfigPath `
+    -TemplatePath $codexExampleCfg
 
 Write-Output "=== 生成快捷命令 ==="
 
@@ -140,21 +208,6 @@ Write-Output "=== 生成快捷命令 ==="
 & (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') | Out-Host
 
 Write-Output "=== PATH 管理 ==="
-
-function Ensure-UserPathItem {
-    param([Parameter(Mandatory)][string]$PathItem, [switch]$ShouldAdd)
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $items = if ($userPath) { $userPath -split ';' | Where-Object { $_ } } else { @() }
-    $exists = $items | Where-Object { $_.TrimEnd('\') -ieq $PathItem.TrimEnd('\') }
-    if ($exists) { return }
-    if ($ShouldAdd) {
-        [Environment]::SetEnvironmentVariable('Path', (($items + $PathItem) -join ';'), 'User')
-        Write-Output "已加入用户 PATH：$PathItem"
-    } else {
-        Write-Warning "快捷命令目录不在 PATH 中：$PathItem"
-    }
-}
-
 Ensure-UserPathItem -PathItem $claudeBin -ShouldAdd:$AddPath
 Ensure-UserPathItem -PathItem $codexBin  -ShouldAdd:$AddPath
 
@@ -166,16 +219,22 @@ Write-Output ""
 Write-Output "Claude Code (ccp):"
 Write-Output "  配置文件：$claudeConfigPath"
 Write-Output "  快捷命令：$claudeBin"
-Write-Output "  使用：ccp / ccp-mi / ccp-ds / ccp-list / ccp-manager"
+Write-Output "  使用：ccp / ccp setup / ccp mi / ccp list / ccp manager"
 Write-Output ""
 Write-Output "Codex CLI (cdp):"
 Write-Output "  配置文件：$codexConfigPath"
 Write-Output "  快捷命令：$codexBin"
-Write-Output "  使用：cdp / cdp-mi / cdp-ds / cdp-list / cdp-manager"
+Write-Output "  使用：cdp / cdp setup / cdp ds / cdp list / cdp manager"
 Write-Output ""
 
 if (-not $AddPath) {
     Write-Warning "如需自动加入 PATH，请重新执行：.\install.ps1 -AddPath"
 } else {
     Write-Output "请重新打开 PowerShell / Windows Terminal 后使用快捷命令。"
+}
+
+if ($Configure) {
+    Write-Output ""
+    Write-Output "=== 配置向导 ==="
+    Invoke-PostInstallConfigure
 }

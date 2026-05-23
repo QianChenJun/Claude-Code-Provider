@@ -1,7 +1,7 @@
 # AI CLI Switcher — 可优化项清单
 
 > 基于 2026-05-22 代码库多维度审查，按优先级排列。
-> **进度：11/16 已完成** | 最后更新：2026-05-23
+> **进度：14/19 已完成** | 最后更新：2026-05-24
 
 ## P0 — 修复（影响功能正确性）
 
@@ -89,4 +89,19 @@
 ### 16. 快捷命令 bin 目录污染 PATH 的风险
 **位置**：`Sync-ToolShortcuts` 生成的 `bin/` 目录
 **问题**：多工具 bin 目录同名 shim 可能冲突；文件数量多（CCP 25 个 + CDP 17 个）。
-**建议**：评估单一入口命令 + 子命令模式（如 `ccp switch mi`）。
+**状态**：部分缓解。README 已统一推荐 `ccp mi` / `cdp ds` 子命令形式；兼容快捷命令仍保留，避免破坏旧用户习惯。
+
+### 17. ✅ 新用户配置成本偏高
+**位置**：`ProviderCore.psm1`、`Invoke-Provider.ps1`、`init.ps1`
+**问题**：用户需要手动编辑 JSON、设置多个环境变量、再同步快捷命令。
+**已完成**：新增 `ccp setup` / `cdp setup` / `.\init.ps1 setup` 配置向导，自动写入配置、设置用户环境变量、同步快捷命令。
+
+### 18. ✅ 安装脚本部署逻辑重复
+**位置**：`Claude-Provider-Profiles-Kit/install.ps1`
+**问题**：核心文件和工具 wrapper 的 Copy-Item 逻辑重复，维护成本高。
+**已完成**：抽出 `Copy-RequiredFile`、`Deploy-SharedFiles`、`Deploy-ToolFiles`、`Initialize-ConfigFile`，并新增 `-Configure` 安装后配置入口。
+
+### 19. ✅ README 用户路径不够清晰
+**位置**：`README.md`、`Claude-Provider-Profiles-Kit/README.md`
+**问题**：用户安装、配置字段、开发者架构混在一起，命令风格不统一。
+**已完成**：重写为用户优先文档，统一推荐 `ccp setup`、`ccp mi`、`cdp ds`；开发者内容后置。

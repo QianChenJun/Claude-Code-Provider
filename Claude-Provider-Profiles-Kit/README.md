@@ -1,214 +1,155 @@
-# AI CLI Switcher — 安装包
+# AI CLI Switcher 安装包
 
-统一的 AI CLI 多供应商切换平台。一个架构，覆盖 Claude Code、Codex CLI 及未来所有 AI 工具。
+这是给普通用户使用的安装包。它会安装 `ccp`（Claude Code）和 `cdp`（Codex CLI）两套供应商切换命令。
 
-`ccp` (Claude Code) / `cdp` (Codex CLI) / `ocp` (OpenCode, 即将支持) — 三者共享同一核心模块，命令体系完全对等。
-
-> Windows-only · PowerShell 5.1+ · 不含真实 API Key
+> Windows only · PowerShell 5.1+ / PowerShell 7+ · 不包含真实 API Key
 
 ---
 
-## 安装前要求
+## 安装前准备
+
+至少安装一个 CLI：
 
 ```powershell
-claude --version     # Claude Code（可选）
-codex --version      # Codex CLI（可选）
-node --version       # Web 管理台（可选，需 18+）
+claude --version     # Claude Code，可选
+codex --version      # Codex CLI，可选
+node --version       # Web 管理页面需要 Node.js 18+，可选
 ```
-
-至少需要安装 Claude Code 或 Codex CLI 中的一个。
 
 ---
 
-## 安装
+## 推荐安装方式
 
 ```powershell
-.\install.ps1              # 基本安装
-.\install.ps1 -AddPath     # 安装并自动加入 PATH
-.\install.ps1 -OverwriteConfig  # 用模板覆盖已有配置
-```
-
-安装后重开终端。
-
----
-
-## 验证
-
-```powershell
-ccp-list    # Claude Code 供应商列表
-cdp-list    # Codex CLI 供应商列表
-```
-
-如提示命令不存在，确认 `%USERPROFILE%\.claude\bin` 和 `%USERPROFILE%\.codex\bin` 在 PATH 中：
-
-```powershell
+cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 ```
 
----
+安装后重新打开 PowerShell / Windows Terminal。
 
-## 配置 API Key
-
-```powershell
-# Claude Code
-[Environment]::SetEnvironmentVariable('MI_CLAUDE_API_KEY', 'your-key', 'User')
-[Environment]::SetEnvironmentVariable('DS_CLAUDE_API_KEY', 'your-key', 'User')
-
-# Codex CLI
-[Environment]::SetEnvironmentVariable('MI_CODEX_API_KEY', 'your-key', 'User')
-[Environment]::SetEnvironmentVariable('DS_CODEX_API_KEY', 'your-key', 'User')
-```
-
-设置后重开终端。
-
----
-
-## 使用
-
-### Claude Code (`ccp`)
+如果想安装后立刻进入配置向导：
 
 ```powershell
-ccp                            # 交互菜单
-ccp-mi                         # 使用小米 MiMo
-ccp-ds                         # 使用 DeepSeek
-ccp-mi --model claude-opus-4-7 # 临时覆盖模型
-ccp-mi -p "帮我总结"            # 非交互模式
-ccp-list                       # 查看所有供应商
-ccp-sync                       # 重新生成快捷命令
-ccp-manager                    # Web 管理页面
+.\install.ps1 -AddPath -Configure
 ```
-
-兼容旧命令：`mi-claude`、`ds-claude`、`provider-claude`。
-
-### Codex CLI (`cdp`)
-
-```powershell
-cdp                            # 交互菜单
-cdp-mi                         # 使用小米 MiMo
-cdp-ds                         # 使用 DeepSeek
-cdp-list                       # 查看所有供应商
-cdp-sync                       # 重新生成快捷命令
-cdp-manager                    # Web 管理页面
-```
-
-兼容旧命令：`mi-codex`、`ds-codex`、`provider-codex`。
 
 ---
 
 ## 新增供应商
 
-### 方式 A：Web 管理台（推荐）
+推荐使用配置向导：
 
 ```powershell
-ccp-manager    # 或 cdp-manager
+ccp setup     # 配置 Claude Code 供应商
+cdp setup     # 配置 Codex CLI 供应商
 ```
 
-点"新增配置"，填写后点"保存并同步"。
+你只需要按提示填写：
 
-### 方式 B：手动编辑
+- 配置 ID：例如 `mi`、`ds`、`openrouter`
+- 显示名称
+- 接口地址 `baseUrl`
+- 默认模型 `model`
+- API Key
 
-编辑配置文件后运行 `ccp-sync` 或 `cdp-sync`。
-
-配置文件位置：
-- Claude Code: `%USERPROFILE%\.claude\provider-profiles\providers.json`
-- Codex CLI: `%USERPROFILE%\.codex\provider-profiles\providers.json`
+API Key 会写入 Windows 用户环境变量，不会写进配置文件。
 
 ---
 
-## 配置字段
+## 启动
 
-### Claude Code
-
-| 字段 | 说明 |
-|------|------|
-| `displayName` | 显示名称 |
-| `shortcut` | 兼容命令名（默认 `<id>-claude`） |
-| `baseUrl` | Anthropic 兼容接口地址 |
-| `authEnv` | `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY` |
-| `apiKeyEnv` | API Key 环境变量名 |
-| `apiKeyFile` | API Key 文件路径 |
-| `model` | 默认模型 |
-| `haikuModel` / `sonnetModel` / `opusModel` | 模型映射 |
-| `cliModel` | `--model` 默认值 |
-| `extraEnv` | 额外环境变量（JSON 对象） |
-
-### Codex CLI
-
-| 字段 | 说明 |
-|------|------|
-| `displayName` | 显示名称 |
-| `shortcut` | 兼容命令名（默认 `<id>-codex`） |
-| `baseUrl` | OpenAI 兼容接口地址 |
-| `apiKeyEnv` / `apiKeyFile` | API Key 来源 |
-| `model` | 默认模型 |
-| `modelContextWindow` | 上下文窗口大小 |
-| `modelReasoningEffort` | `high` / `xhigh` / `max` |
-| `supportsWebsockets` | `true` / `false` |
-| `queryParams` / `httpHeaders` / `envHttpHeaders` | HTTP 配置 |
-| `extraEnv` | 额外环境变量 |
-
----
-
-## 安装目录
-
+```powershell
+ccp mi        # 使用 mi 配置启动 Claude Code
+ccp ds        # 使用 ds 配置启动 Claude Code
+cdp mi        # 使用 mi 配置启动 Codex CLI
+cdp ds        # 使用 ds 配置启动 Codex CLI
 ```
-%USERPROFILE%\
-├── .claude\
-│   ├── provider-profiles\       ← Claude 配置 + 核心模块 + 脚本
-│   │   ├── providers.json
-│   │   ├── server.mjs
-│   │   ├── web\
-│   │   └── src\
-│   └── bin\                     ← ccp, ccp-* 快捷命令
-│
-├── .codex\
-│   ├── provider-profiles\       ← Codex 配置 + 核心模块 + 脚本
-│   │   ├── providers.json
-│   │   ├── server.mjs
-│   │   ├── web\
-│   │   └── src\
-│   └── bin\                     ← cdp, cdp-* 快捷命令
+
+打开交互菜单：
+
+```powershell
+ccp
+cdp
+```
+
+查看配置：
+
+```powershell
+ccp list
+cdp list
 ```
 
 ---
 
-## 开发者指南：添加新工具
+## Web 管理页面
 
-添加对新 AI CLI（如 OpenCode）的支持只需 ~50 行代码：
+```powershell
+ccp manager
+cdp manager
+```
 
-1. 在 `src/tools/opencode/` 创建 3 个脚本（Invoke / Sync / Manage）
-2. 在 `ProviderCore.psm1` 添加 `Register-ProviderTool` 注册块
-3. 在 `install.ps1` 添加部署行
+需要 Node.js 18+。Web 页面可新增、复制、删除供应商配置，并一键保存同步快捷命令。
 
-核心逻辑零改动。详见项目 README.md 的 Developer Guide 章节。
+---
+
+## 常用命令
+
+| 操作 | Claude Code | Codex CLI |
+|------|-------------|-----------|
+| 配置向导 | `ccp setup` | `cdp setup` |
+| 启动配置 | `ccp mi` | `cdp mi` |
+| 查看列表 | `ccp list` | `cdp list` |
+| 同步命令 | `ccp sync` | `cdp sync` |
+| Web 管理 | `ccp manager` | `cdp manager` |
+
+安装脚本也会生成 `ccp-mi`、`cdp-ds`、`mi-claude` 等兼容快捷命令，但文档推荐优先使用 `ccp mi` / `cdp ds`。
+
+---
+
+## 配置文件位置
+
+| 工具 | 配置文件 |
+|------|----------|
+| Claude Code | `%USERPROFILE%\.claude\provider-profiles\providers.json` |
+| Codex CLI | `%USERPROFILE%\.codex\provider-profiles\providers.json` |
+
+手动编辑配置后，执行：
+
+```powershell
+ccp sync
+cdp sync
+```
 
 ---
 
 ## 常见问题
 
-### 快捷命令找不到
+### `ccp` / `cdp` 命令找不到
+
+重新执行：
 
 ```powershell
 .\install.ps1 -AddPath
-# 重开终端
 ```
 
-### 报缺少 apiKey
+然后重开终端。
+
+### 提示缺少 API Key
+
+如果刚用 `ccp setup` / `cdp setup` 配置过，请重开终端。
+
+也可以手动设置：
 
 ```powershell
-$env:MI_CLAUDE_API_KEY    # 确认环境变量存在
-# 刚设置的变量需要重开终端
-```
-
-### 新增供应商后命令不存在
-
-```powershell
-ccp-sync    # 或 cdp-sync
+[Environment]::SetEnvironmentVariable('MI_CLAUDE_API_KEY', '你的 API Key', 'User')
+[Environment]::SetEnvironmentVariable('DS_CODEX_API_KEY', '你的 API Key', 'User')
 ```
 
 ### 不想覆盖已有配置
 
-默认安装不覆盖已有 `providers.json`。如需强制覆盖：
+默认不会覆盖已有 `providers.json`。
+
+只有显式指定才会覆盖：
 
 ```powershell
 .\install.ps1 -OverwriteConfig
@@ -218,6 +159,6 @@ ccp-sync    # 或 cdp-sync
 
 ## 安全建议
 
-- 不要把真实 API Key 写进聊天、仓库、提交记录
-- 优先用 `apiKeyEnv`（环境变量）
-- 发给别人前确认 `providers.json` 没有真实 Key
+- 不要把真实 API Key 写进仓库、聊天或提交记录
+- 优先使用配置向导或 `apiKeyEnv`
+- 发给别人前确认配置文件没有真实密钥

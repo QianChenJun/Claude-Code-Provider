@@ -191,6 +191,306 @@ function Resolve-ApiKey {
 }
 
 # ============================================================
+#  Profile Setup Helpers
+# ============================================================
+
+function Get-DefaultApiKeyEnvName {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ToolName,
+        [Parameter(Mandatory)][string]$ProfileId
+    )
+
+    $profilePart = ($ProfileId -replace '[^A-Za-z0-9]', '_').Trim('_').ToUpperInvariant()
+    $toolPart = ($ToolName -replace '[^A-Za-z0-9]', '_').Trim('_').ToUpperInvariant()
+    if (-not $profilePart) { throw "配置 ID 不能用于生成环境变量名：$ProfileId" }
+    if (-not $toolPart) { throw "工具名称不能用于生成环境变量名：$ToolName" }
+    return "$($profilePart)_$($toolPart)_API_KEY"
+}
+
+function Assert-ProviderProfileInput {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProfileId,
+        [Parameter(Mandatory)][string]$BaseUrl,
+        [hashtable]$Tool
+    )
+
+    if ($ProfileId -notmatch '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$') {
+        throw "配置 ID 不合法：$ProfileId。请使用 1-40 位英文字母、数字、下划线或短横线，并以字母或数字开头。"
+    }
+
+    $reservedProfileIds = @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure')
+    if ($ProfileId -in $reservedProfileIds) {
+        throw "配置 ID 与内置命令冲突：$ProfileId"
+    }
+
+    if ($Tool) {
+        $prefix = $Tool.commandPrefix
+        $suffix = $Tool.defaultShortcutSuffix
+        $reservedCmdNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "provider-$($Tool.name)")) {
+            [void]$reservedCmdNames.Add($name)
+        }
+        if ($Tool.Contains('legacyCommands') -and $Tool.legacyCommands) {
+            foreach ($name in $Tool.legacyCommands) {
+                [void]$reservedCmdNames.Add($name)
+            }
+        }
+
+        if ($reservedCmdNames.Contains($ProfileId)) {
+            throw "配置 ID 会覆盖内置快捷命令：$ProfileId"
+        }
+
+        $defaultShortcut = "$ProfileId-$suffix"
+        $legacyProfileCmds = @("mi-$suffix", "ds-$suffix")
+        if ($reservedCmdNames.Contains($defaultShortcut) -and $defaultShortcut -notin $legacyProfileCmds) {
+            throw "配置 ID 会生成冲突的默认快捷命令：$defaultShortcut"
+        }
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate($BaseUrl, [System.UriKind]::Absolute, [ref]$uri) -or
+        $uri.Scheme -notin @('http', 'https')) {
+        throw "接口地址不合法：$BaseUrl。请输入 http:// 或 https:// 开头的完整地址。"
+    }
+}
+
+function Upsert-ProviderProfile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ToolName,
+        [Parameter(Mandatory)][string]$ProfileId,
+        [string]$DisplayName,
+        [Parameter(Mandatory)][string]$BaseUrl,
+        [string]$Model,
+        [string]$ApiKey,
+        [string]$ApiKeyEnv,
+        [string]$AuthEnv,
+        [ValidateSet('User', 'Process', 'Machine', 'None')]
+        [string]$EnvironmentTarget = 'User',
+        [switch]$Sync
+    )
+
+    $tool = Get-ProviderTool -Name $ToolName
+    Assert-ProviderProfileInput -ProfileId $ProfileId -BaseUrl $BaseUrl -Tool $tool
+
+    $configPath = $tool.configPath
+    $configDir = Split-Path -Parent $configPath
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+
+    if (Test-Path -LiteralPath $configPath) {
+        $config = Read-JsonFile -Path $configPath
+    }
+    else {
+        $config = [ordered]@{ version = 1; profiles = [ordered]@{} }
+    }
+
+    if (-not $config.Contains('version')) { $config['version'] = 1 }
+    if (-not $config.Contains('profiles') -or $null -eq $config.profiles) {
+        $config['profiles'] = [ordered]@{}
+    }
+
+    $profile = [ordered]@{}
+    if ($config.profiles.Contains($ProfileId) -and $config.profiles[$ProfileId]) {
+        foreach ($entry in $config.profiles[$ProfileId].GetEnumerator()) {
+            $profile[$entry.Key] = $entry.Value
+        }
+    }
+
+    if (-not $ApiKeyEnv) {
+        $ApiKeyEnv = if ($profile.Contains('apiKeyEnv') -and $profile.apiKeyEnv) {
+            $profile.apiKeyEnv
+        }
+        else {
+            Get-DefaultApiKeyEnvName -ToolName $ToolName -ProfileId $ProfileId
+        }
+    }
+
+    foreach ($plainKeyField in @('apiKey', 'token', 'key')) {
+        if ($profile.Contains($plainKeyField)) { $profile.Remove($plainKeyField) }
+    }
+
+    if ($DisplayName) {
+        $profile['displayName'] = $DisplayName
+    }
+    elseif (-not $profile.Contains('displayName') -or -not $profile.displayName) {
+        $profile['displayName'] = $ProfileId
+    }
+
+    $profile['baseUrl'] = $BaseUrl
+    $profile['apiKeyEnv'] = $ApiKeyEnv
+
+    if ($ToolName -eq 'claude') {
+        if ($AuthEnv) {
+            $profile['authEnv'] = $AuthEnv
+        }
+        elseif (-not $profile.Contains('authEnv') -or -not $profile.authEnv) {
+            $profile['authEnv'] = 'ANTHROPIC_AUTH_TOKEN'
+        }
+    }
+
+    if ($Model) { $profile['model'] = $Model }
+
+    $config.profiles[$ProfileId] = $profile
+    Write-Utf8NoBomJson -Path $configPath -Value $config
+
+    if ($ApiKey -and $EnvironmentTarget -ne 'None') {
+        [Environment]::SetEnvironmentVariable($ApiKeyEnv, $ApiKey, $EnvironmentTarget)
+        Set-Item -LiteralPath "Env:\$ApiKeyEnv" -Value $ApiKey
+    }
+
+    if ($Sync) {
+        Sync-ToolShortcuts -ToolName $ToolName | Out-Host
+    }
+
+    return [PSCustomObject]@{
+        ToolName    = $ToolName
+        ProfileId   = $ProfileId
+        ConfigPath  = $configPath
+        ApiKeyEnv   = $ApiKeyEnv
+        Command     = "$($tool.commandPrefix) $ProfileId"
+        Shortcut    = "$($tool.commandPrefix)-$ProfileId"
+        Manager     = "$($tool.commandPrefix) manager"
+    }
+}
+
+function Read-OptionalSecureString {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Prompt)
+
+    $secure = Read-Host $Prompt -AsSecureString
+    if (-not $secure -or $secure.Length -eq 0) { return '' }
+
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    }
+    finally {
+        if ($bstr -ne [IntPtr]::Zero) {
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+        }
+    }
+}
+
+function Invoke-ProviderSetup {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ToolName,
+        [string]$ProfileId
+    )
+
+    $tool = Get-ProviderTool -Name $ToolName
+
+    Write-Output ""
+    Write-Output "$($tool.displayName) 配置向导"
+    Write-Output "按回车可跳过可选项。API Key 会写入用户环境变量，不会写入 providers.json。"
+    Write-Output ""
+
+    while ($true) {
+        while (-not $ProfileId) {
+            $ProfileId = (Read-Host "配置 ID（例如 mi、ds、openrouter）").Trim()
+        }
+        try {
+            Assert-ProviderProfileInput -ProfileId $ProfileId -BaseUrl 'https://placeholder.local' -Tool $tool
+            break
+        }
+        catch {
+            Write-Warning $_.Exception.Message
+            $ProfileId = ''
+        }
+    }
+
+    $existingProfile = [ordered]@{}
+    if (Test-Path -LiteralPath $tool.configPath) {
+        $existingConfig = Read-JsonFile -Path $tool.configPath
+        if ($existingConfig.Contains('profiles') -and
+            $existingConfig.profiles -and
+            $existingConfig.profiles.Contains($ProfileId) -and
+            $existingConfig.profiles[$ProfileId]) {
+            $existingProfile = $existingConfig.profiles[$ProfileId]
+        }
+    }
+
+    $defaultDisplayName = if ($existingProfile.Contains('displayName') -and $existingProfile.displayName) {
+        $existingProfile.displayName
+    }
+    else {
+        $ProfileId
+    }
+    $displayName = (Read-Host "显示名称（默认：$defaultDisplayName）").Trim()
+    if (-not $displayName) { $displayName = $defaultDisplayName }
+
+    while ($true) {
+        $defaultBaseUrl = if ($existingProfile.Contains('baseUrl') -and $existingProfile.baseUrl) {
+            $existingProfile.baseUrl
+        }
+        else {
+            ''
+        }
+        $baseUrlPrompt = if ($defaultBaseUrl) { "接口地址 baseUrl（默认：$defaultBaseUrl）" } else { "接口地址 baseUrl（必填）" }
+        $baseUrl = ''
+        while (-not $baseUrl) {
+            $baseUrl = (Read-Host $baseUrlPrompt).Trim()
+            if (-not $baseUrl -and $defaultBaseUrl) { $baseUrl = $defaultBaseUrl }
+        }
+        try {
+            Assert-ProviderProfileInput -ProfileId $ProfileId -BaseUrl $baseUrl -Tool $tool
+            break
+        }
+        catch {
+            Write-Warning $_.Exception.Message
+        }
+    }
+
+    $defaultModel = if ($existingProfile.Contains('model') -and $existingProfile.model) {
+        $existingProfile.model
+    }
+    else {
+        ''
+    }
+    $modelPrompt = if ($defaultModel) { "默认模型 model（默认：$defaultModel）" } else { "默认模型 model（可选）" }
+    $model = (Read-Host $modelPrompt).Trim()
+    if (-not $model) { $model = $defaultModel }
+
+    $defaultApiKeyEnv = if ($existingProfile.Contains('apiKeyEnv') -and $existingProfile.apiKeyEnv) {
+        $existingProfile.apiKeyEnv
+    }
+    else {
+        Get-DefaultApiKeyEnvName -ToolName $ToolName -ProfileId $ProfileId
+    }
+    $apiKeyEnv = (Read-Host "API Key 环境变量名（默认：$defaultApiKeyEnv）").Trim()
+    if (-not $apiKeyEnv) { $apiKeyEnv = $defaultApiKeyEnv }
+
+    $apiKey = Read-OptionalSecureString -Prompt "API Key（可选；输入时不会回显）"
+
+    $result = Upsert-ProviderProfile `
+        -ToolName $ToolName `
+        -ProfileId $ProfileId `
+        -DisplayName $displayName `
+        -BaseUrl $baseUrl `
+        -Model $model `
+        -ApiKey $apiKey `
+        -ApiKeyEnv $apiKeyEnv `
+        -EnvironmentTarget 'User' `
+        -Sync
+
+    Write-Output ""
+    Write-Output "配置已保存：$($result.ConfigPath)"
+    Write-Output "推荐启动命令：$($result.Command)"
+    Write-Output "快捷命令：$($result.Shortcut)"
+    Write-Output "管理页面：$($result.Manager)"
+    if ($apiKey) {
+        Write-Output "API Key 已写入用户环境变量：$apiKeyEnv"
+        Write-Output "请重新打开 PowerShell / Windows Terminal，让新环境变量在所有终端生效。"
+    }
+    else {
+        Write-Warning "未设置 API Key。稍后可执行："
+        Write-Warning "[Environment]::SetEnvironmentVariable('$apiKeyEnv', '你的 API Key', 'User')"
+    }
+}
+
+# ============================================================
 #  Display Helpers
 # ============================================================
 
@@ -207,7 +507,8 @@ function Write-ProfileTable {
         $item = $_.Value
         [PSCustomObject]@{
             '配置ID'   = $_.Name
-            '推荐命令' = "$prefix-$($_.Name)"
+            '推荐命令' = "$prefix $($_.Name)"
+            '快捷命令' = "$prefix-$($_.Name)"
             '兼容命令' = $(if ($item['shortcut']) { $item['shortcut'] } else { "$($_.Name)-$($Tool.defaultShortcutSuffix)" })
             '名称'     = $(if ($item['displayName']) { $item['displayName'] } else { '' })
             '接口地址' = $(if ($item['baseUrl']) { $item['baseUrl'] } else { '' })
@@ -228,8 +529,10 @@ function Write-Usage {
     Write-Output "用法："
     Write-Output "  $prefix                         # 打开交互菜单"
     Write-Output "  $prefix <profile> [$($Tool.name) args]"
+    Write-Output "  $prefix setup [profile]         # 新增或更新配置"
     Write-Output "  $prefix-list"
     Write-Output "  $prefix-<profile> [$($Tool.name) args]"
+    Write-Output "  $prefix-setup [profile]"
     Write-Output "  $prefix-sync"
     Write-Output "  $prefix-manager"
     Write-Output ""
@@ -498,11 +801,12 @@ function Sync-ToolShortcuts {
     $usedShortcutNames  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reservedProfileIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reservedCmdNames   = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $legacyProfileCmds  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
-    foreach ($name in @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage')) {
+    foreach ($name in @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure')) {
         [void]$reservedProfileIds.Add($name)
     }
-    foreach ($name in @($prefix, "$prefix-list", "$prefix-sync", "$prefix-manager", "provider-$($tool.name)")) {
+    foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "provider-$($tool.name)")) {
         [void]$reservedCmdNames.Add($name)
         [void]$usedShortcutNames.Add($name.ToLowerInvariant())
     }
@@ -511,6 +815,12 @@ function Sync-ToolShortcuts {
         foreach ($name in $tool.legacyCommands) {
             [void]$reservedCmdNames.Add($name)
             [void]$usedShortcutNames.Add($name.ToLowerInvariant())
+        }
+    }
+    foreach ($legacyProfileId in @('mi', 'ds')) {
+        $legacyProfileCmd = "$legacyProfileId-$suffix"
+        if ($reservedCmdNames.Contains($legacyProfileCmd)) {
+            [void]$legacyProfileCmds.Add($legacyProfileCmd)
         }
     }
 
@@ -527,10 +837,17 @@ function Sync-ToolShortcuts {
         }
     }
 
-    function Register-ShortcutName {
-        param([string]$Name, [string]$Owner)
+    function Register-ProfileShortcutName {
+        param(
+            [string]$Name,
+            [string]$Owner,
+            [bool]$AllowLegacyProfileCommand = $false
+        )
         Assert-ShortcutName -Name $Name
         if ($reservedCmdNames.Contains($Name)) {
+            if ($AllowLegacyProfileCommand -and $legacyProfileCmds.Contains($Name)) {
+                return
+            }
             throw "快捷命令与内置命令冲突：$Name"
         }
         $key = $Name.ToLowerInvariant()
@@ -569,6 +886,12 @@ exit `$LASTEXITCODE
 exit `$LASTEXITCODE
 "@
 
+    Write-Shim -Path (Join-Path $binDir "$prefix-setup.ps1") -Content @"
+#!/usr/bin/env pwsh
+& '$invokeScript' setup @args
+exit `$LASTEXITCODE
+"@
+
     Write-Shim -Path (Join-Path $binDir "$prefix-sync.ps1") -Content @"
 #!/usr/bin/env pwsh
 & '$syncScript' @args
@@ -591,7 +914,7 @@ exit `$LASTEXITCODE
         }
     }
 
-    Write-Output "已同步：$prefix / $prefix-list / $prefix-sync / $prefix-manager"
+    Write-Output "已同步：$prefix / $prefix-list / $prefix-setup / $prefix-sync / $prefix-manager"
 
     foreach ($entry in $config.profiles.GetEnumerator()) {
         $id      = $entry.Key
@@ -604,20 +927,14 @@ exit `$LASTEXITCODE
 
         $shortcut = Get-ProfileValue -Map $profile -Names @('shortcut')
         if (-not $shortcut) { $shortcut = "$id-$suffix" }
-        # 注册 shortcut（如 mi-claude），与 legacy 命令重名时跳过
-        if (-not $usedShortcutNames.Contains($shortcut.ToLowerInvariant())) {
-            Register-ShortcutName -Name $shortcut -Owner $id
-        }
+        $allowLegacyShortcut = ($shortcut -ieq "$id-$suffix" -and $legacyProfileCmds.Contains($shortcut))
+        Register-ProfileShortcutName -Name $shortcut -Owner $id -AllowLegacyProfileCommand:$allowLegacyShortcut
 
         $prefixedCmd = "$prefix-$id"
-        if (-not $usedShortcutNames.Contains($prefixedCmd.ToLowerInvariant())) {
-            Register-ShortcutName -Name $prefixedCmd -Owner $id
-        }
+        Register-ProfileShortcutName -Name $prefixedCmd -Owner $id
 
         # 配置 ID 直呼快捷命令（如 mi / ds / gpt），配置 ID 唯一，无需前后缀
-        if (-not $usedShortcutNames.Contains($id.ToLowerInvariant())) {
-            Register-ShortcutName -Name $id -Owner $id
-        }
+        Register-ProfileShortcutName -Name $id -Owner $id
 
         $shortcutContent = @"
 #!/usr/bin/env pwsh
@@ -915,6 +1232,10 @@ Export-ModuleMember -Function @(
     'Get-ProfileValue',
     'Test-HasCliModelArg',
     'Resolve-ApiKey',
+    'Get-DefaultApiKeyEnvName',
+    'Assert-ProviderProfileInput',
+    'Upsert-ProviderProfile',
+    'Invoke-ProviderSetup',
     'Write-ProfileTable',
     'Write-Usage',
     'Select-ProfileFromMenu',

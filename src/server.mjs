@@ -1,18 +1,50 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(root, 'web');
+const args = process.argv.slice(2);
+
+function getArgValue(name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+const port = Number(getArgValue('--port') || 15722);
+const requestedTool = getArgValue('--tool');
+const activeTool = ['claude', 'codex'].includes(requestedTool) ? requestedTool : 'claude';
+const userHome = process.env.USERPROFILE || process.env.HOME;
+
+if (!userHome) {
+  throw new Error('无法定位用户目录：USERPROFILE/HOME 未设置');
+}
+
+function getProfileRoot(toolName) {
+  const toolDir = toolName === 'codex' ? '.codex' : '.claude';
+  return path.join(userHome, toolDir, 'provider-profiles');
+}
+
+function getConfigPath(toolName) {
+  return path.join(getProfileRoot(toolName), 'providers.json');
+}
+
+function getSyncScript(toolName, scriptName) {
+  const isRepoLayout = path.basename(root).toLowerCase() === 'src';
+  if (isRepoLayout) {
+    return path.join(root, 'tools', toolName, scriptName);
+  }
+  return path.join(getProfileRoot(toolName), 'src', 'tools', toolName, scriptName);
+}
 
 // Tool registry: each tool maps to its config path and sync script
 const TOOLS = {
   claude: {
-    configPath: path.join(root, 'providers.json'),
-    syncScript: path.join(root, 'src', 'tools', 'claude', 'Sync-ClaudeShortcuts.ps1'),
+    configPath: getConfigPath('claude'),
+    syncScript: getSyncScript('claude', 'Sync-ClaudeShortcuts.ps1'),
     displayName: 'Claude Code',
     fields: {
       stringKeys: [
@@ -24,8 +56,8 @@ const TOOLS = {
     }
   },
   codex: {
-    configPath: path.join(root, 'providers.json'),
-    syncScript: path.join(root, 'src', 'tools', 'codex', 'Sync-CodexShortcuts.ps1'),
+    configPath: getConfigPath('codex'),
+    syncScript: getSyncScript('codex', 'Sync-CodexShortcuts.ps1'),
     displayName: 'Codex CLI',
     fields: {
       stringKeys: [
@@ -43,18 +75,15 @@ const TOOLS = {
   }
 };
 
-const args = process.argv.slice(2);
-const portIndex = args.indexOf('--port');
-const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 15722;
-
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
-const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage']);
+const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
 const reservedCommandNames = new Set([
-  'ccp', 'ccp-list', 'ccp-sync', 'ccp-manager',
-  'cdp', 'cdp-list', 'cdp-sync', 'cdp-manager',
+  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager',
   'mi-claude', 'ds-claude', 'provider-claude', 'claude-profile-manager', 'sync-claude-profiles',
   'mi-codex', 'ds-codex', 'provider-codex', 'codex-profile-manager', 'sync-codex-profiles'
 ]);
+const legacyProfileCommandNames = new Set(['mi-claude', 'ds-claude', 'mi-codex', 'ds-codex']);
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -87,18 +116,24 @@ function getTool(name) {
 }
 
 async function readConfig(tool) {
-  const text = await readFile(tool.configPath, 'utf8');
-  return JSON.parse(text);
+  try {
+    const text = await readFile(tool.configPath, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { version: 1, profiles: {} };
+    throw error;
+  }
 }
 
 async function writeConfig(tool, config) {
+  await mkdir(path.dirname(tool.configPath), { recursive: true });
   await writeFile(tool.configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
 function runPwshScript(scriptPath) {
   return new Promise((resolve, reject) => {
     const child = spawn('pwsh', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
-      cwd: root,
+      cwd: path.dirname(scriptPath),
       windowsHide: true
     });
     let stdout = '';
@@ -165,9 +200,12 @@ function validateProfileId(id) {
   return null;
 }
 
-function validateCommandName(name) {
+function validateProfileCommandName(name, { allowLegacyProfileCommand = false } = {}) {
   if (!profileIdPattern.test(name)) return '快捷命令格式不合法';
-  if (reservedCommandNames.has(name.toLowerCase())) return '快捷命令与内置命令冲突';
+  const key = name.toLowerCase();
+  if (reservedCommandNames.has(key) && !(allowLegacyProfileCommand && legacyProfileCommandNames.has(key))) {
+    return '快捷命令与内置命令冲突';
+  }
   return null;
 }
 
@@ -205,7 +243,7 @@ const server = http.createServer(async (req, res) => {
 
     // Health check
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(res, 200, { ok: true, root, tools: Object.keys(TOOLS) });
+      sendJson(res, 200, { ok: true, root, activeTool, tools: Object.keys(TOOLS) });
       return;
     }
 
@@ -213,7 +251,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/tools') {
       const list = {};
       for (const [name, tool] of Object.entries(TOOLS)) {
-        list[name] = { displayName: tool.displayName, fields: tool.fields };
+        list[name] = { displayName: tool.displayName, fields: tool.fields, configPath: tool.configPath };
       }
       sendJson(res, 200, list);
       return;
@@ -252,14 +290,22 @@ const server = http.createServer(async (req, res) => {
 
           const suffix = toolName === 'codex' ? 'codex' : 'claude';
           const prefix = toolName === 'codex' ? 'cdp' : 'ccp';
-          const cmdNames = [profile.shortcut || `${id}-${suffix}`, `${prefix}-${id}`];
+          const shortcut = profile.shortcut || `${id}-${suffix}`;
+          const allowLegacyShortcut = !profile.shortcut && legacyProfileCommandNames.has(shortcut.toLowerCase());
+          const cmdNames = [
+            { name: shortcut, allowLegacyProfileCommand: allowLegacyShortcut },
+            { name: `${prefix}-${id}`, allowLegacyProfileCommand: false },
+            { name: id, allowLegacyProfileCommand: false }
+          ];
 
           for (const cmd of cmdNames) {
-            const cmdErr = validateCommandName(cmd);
-            if (cmdErr) { sendJson(res, 400, { error: `${id}: ${cmdErr}：${cmd}` }); return; }
-            const key = cmd.toLowerCase();
+            const cmdErr = validateProfileCommandName(cmd.name, {
+              allowLegacyProfileCommand: cmd.allowLegacyProfileCommand
+            });
+            if (cmdErr) { sendJson(res, 400, { error: `${id}: ${cmdErr}：${cmd.name}` }); return; }
+            const key = cmd.name.toLowerCase();
             if (usedCommands.has(key)) {
-              sendJson(res, 400, { error: `${id}: 快捷命令与 ${usedCommands.get(key)} 冲突：${cmd}` });
+              sendJson(res, 400, { error: `${id}: 快捷命令与 ${usedCommands.get(key)} 冲突：${cmd.name}` });
               return;
             }
             usedCommands.set(key, id);
@@ -288,5 +334,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, '127.0.0.1', () => {
   console.log(`Provider Profiles 管理台： http://127.0.0.1:${port}/`);
   console.log(`已注册工具：${Object.keys(TOOLS).join(', ')}`);
-  console.log(`配置文件：${TOOLS.claude.configPath}`);
+  for (const [name, tool] of Object.entries(TOOLS)) {
+    console.log(`${name} 配置文件：${tool.configPath}`);
+  }
 });
