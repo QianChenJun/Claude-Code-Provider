@@ -1,8 +1,7 @@
 #!/usr/bin/env pwsh
 # Generic management UI launcher — dot-sourced by tool-specific wrappers.
-# The wrapper must set $ToolName before dot-sourcing this script.
-[CmdletBinding()]
-param([int]$Port = 0, [switch]$Foreground)
+# The wrapper must set $ToolName before dot-sourcing and declare param($Port, $Foreground).
+
 $ErrorActionPreference = 'Stop'
 
 if (-not $ToolName) { throw 'Internal error: $ToolName not set by wrapper script.' }
@@ -15,6 +14,7 @@ Import-ProviderCore
 
 $tool = Get-ProviderTool -Name $ToolName
 
+# 默认端口映射
 if ($Port -eq 0) {
     $portMap = @{ claude = 15723; codex = 15724 }
     $Port = if ($portMap.ContainsKey($ToolName)) { $portMap[$ToolName] } else { 15730 }
@@ -25,8 +25,8 @@ function Get-ManagerState {
     try {
         $r = Invoke-RestMethod -Uri "http://127.0.0.1:$ProbePort/api/health" -Method Get -TimeoutSec 1
         if ($null -ne $r -and $r.ok -and $r.root) {
-            $expected = [System.IO.Path]::GetFullPath($root).TrimEnd('\')
-            $actual   = [System.IO.Path]::GetFullPath("$($r.root)").TrimEnd('\')
+            $expected = [System.IO.Path]::GetFullPath($root).TrimEnd('\\')
+            $actual   = [System.IO.Path]::GetFullPath("$($r.root)").TrimEnd('\\')
             if ($expected -ieq $actual) { return 'Current' }
             return 'Other'
         }
@@ -56,7 +56,7 @@ if ($Foreground) {
 }
 
 if ($state -eq 'Free') {
-    $proc = Start-Process -FilePath 'node' -ArgumentList @($server, '--port', $selectedPort, '--tool', $ToolName) `
+    $proc = Start-Process -FilePath 'node' -ArgumentList @($server, '--port', $selectedPort, '--tool', $ToolName) \
         -WorkingDirectory (Split-Path -Parent $root) -WindowStyle Hidden -PassThru
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {

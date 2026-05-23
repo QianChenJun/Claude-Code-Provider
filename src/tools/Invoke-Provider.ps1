@@ -1,6 +1,7 @@
 #!/usr/bin/env pwsh
 # Generic provider launcher — dot-sourced by tool-specific wrappers.
-# The wrapper must set $ToolName before dot-sourcing this script.
+# The wrapper must set $ToolName before dot-sourcing.
+
 $ErrorActionPreference = 'Stop'
 
 if (-not $ToolName) { throw 'Internal error: $ToolName not set by wrapper script.' }
