@@ -133,7 +133,7 @@ function Get-ProfileValue {
         [Parameter(Mandatory)][string[]]$Names
     )
     foreach ($name in $Names) {
-        if ($Map.ContainsKey($name) -and $null -ne $Map[$name] -and "$($Map[$name])" -ne '') {
+        if ($Map.Contains($name) -and $null -ne $Map[$name] -and "$($Map[$name])" -ne '') {
             return $Map[$name]
         }
     }
@@ -208,10 +208,10 @@ function Write-ProfileTable {
         [PSCustomObject]@{
             '配置ID'   = $_.Name
             '推荐命令' = "$prefix-$($_.Name)"
-            '兼容命令' = $(if ($item.shortcut) { $item.shortcut } else { "$($_.Name)-$($Tool.defaultShortcutSuffix)" })
-            '名称'     = $item.displayName
-            '接口地址' = $item.baseUrl
-            '默认模型' = $item.model
+            '兼容命令' = $(if ($item['shortcut']) { $item['shortcut'] } else { "$($_.Name)-$($Tool.defaultShortcutSuffix)" })
+            '名称'     = $(if ($item['displayName']) { $item['displayName'] } else { '' })
+            '接口地址' = $(if ($item['baseUrl']) { $item['baseUrl'] } else { '' })
+            '默认模型' = $(if ($item['model']) { $item['model'] } else { '' })
         }
     } | Format-Table -AutoSize
 }
@@ -307,7 +307,7 @@ function Select-ProfileFromMenu {
             continue
         }
 
-        if ($Profiles.ContainsKey($choice)) { return $choice }
+        if ($Profiles.Contains($choice)) { return $choice }
         Write-Warning "未知选择：$choice（可用配置 ID：$(($entries | ForEach-Object { $_.Name }) -join ', ')）"
     }
 }
@@ -322,12 +322,12 @@ function Register-ProviderTool {
 
     $requiredKeys = @('name', 'commandPrefix', 'configFileName', 'displayName', 'defaultShortcutSuffix', 'executable', 'launcher')
     foreach ($key in $requiredKeys) {
-        if (-not $ToolConfig.ContainsKey($key) -or $null -eq $ToolConfig[$key]) {
+        if (-not $ToolConfig.Contains($key) -or $null -eq $ToolConfig[$key]) {
             throw "工具配置缺少必需字段：$key"
         }
     }
 
-    if ($script:ToolRegistry.ContainsKey($ToolConfig.name)) {
+    if ($script:ToolRegistry.Contains($ToolConfig.name)) {
         throw "工具 '$($ToolConfig.name)' 已注册"
     }
 
@@ -338,7 +338,7 @@ function Get-ProviderTool {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)
 
-    if (-not $script:ToolRegistry.ContainsKey($Name)) {
+    if (-not $script:ToolRegistry.Contains($Name)) {
         throw "未知工具：$Name。已注册工具：$($script:ToolRegistry.Keys -join ', ')"
     }
     return $script:ToolRegistry[$Name]
@@ -436,11 +436,11 @@ function Invoke-ProviderSession {
     $configPath = $tool.configPath
 
     $config = Read-JsonFile -Path $configPath
-    if (-not $config.ContainsKey('profiles')) {
+    if (-not $config.Contains('profiles')) {
         throw "配置文件必须包含 profiles 对象：$configPath"
     }
 
-    if (-not $config.profiles.ContainsKey($ProfileId)) {
+    if (-not $config.profiles.Contains($ProfileId)) {
         throw "未知配置：$ProfileId。可用配置：$($config.profiles.Keys -join ', ')"
     }
 
@@ -448,7 +448,7 @@ function Invoke-ProviderSession {
     $apiKey   = Resolve-ApiKey -Profile $profile -ProfileId $ProfileId
 
     $managedKeys = [System.Collections.Generic.List[string]]::new()
-    $toolKeys = if ($tool.ContainsKey('envKeys') -and $tool.envKeys) { $tool.envKeys } else { @() }
+    $toolKeys = if ($tool.Contains('envKeys') -and $tool.envKeys) { $tool.envKeys } else { @() }
     foreach ($key in $toolKeys) { $managedKeys.Add($key) }
 
     $session = New-EnvSession -ManagedKeys $managedKeys
@@ -488,7 +488,7 @@ function Sync-ToolShortcuts {
 
     $deployRoot = $tool.configPath | Split-Path -Parent
     $configPath = $tool.configPath
-    $binDir     = Join-Path $deployRoot 'bin'
+    $binDir     = Join-Path (Split-Path -Parent $deployRoot) 'bin'
 
     $prefix             = $tool.commandPrefix
     $suffix             = $tool.defaultShortcutSuffix
@@ -507,7 +507,7 @@ function Sync-ToolShortcuts {
         [void]$usedShortcutNames.Add($name.ToLowerInvariant())
     }
 
-    if ($tool.ContainsKey('legacyCommands') -and $tool.legacyCommands) {
+    if ($tool.Contains('legacyCommands') -and $tool.legacyCommands) {
         foreach ($name in $tool.legacyCommands) {
             [void]$reservedCmdNames.Add($name)
             [void]$usedShortcutNames.Add($name.ToLowerInvariant())
@@ -581,7 +581,7 @@ exit `$LASTEXITCODE
 exit `$LASTEXITCODE
 "@
 
-    if ($tool.ContainsKey('legacyCommands') -and $tool.legacyCommands) {
+    if ($tool.Contains('legacyCommands') -and $tool.legacyCommands) {
         foreach ($legacy in $tool.legacyCommands) {
             Write-Shim -Path (Join-Path $binDir "$legacy.ps1") -Content @"
 #!/usr/bin/env pwsh
@@ -709,7 +709,7 @@ function Import-ProviderCore {
 $script:UserHome = $env:USERPROFILE
 
 # Claude Code tool — only register if not already present
-if (-not $script:ToolRegistry.ContainsKey('claude')) {
+if (-not $script:ToolRegistry.Contains('claude')) {
     $claudeRoot = Join-Path $script:UserHome '.claude\provider-profiles'
     Register-ProviderTool @{
         name                 = 'claude'
@@ -735,7 +735,7 @@ if (-not $script:ToolRegistry.ContainsKey('claude')) {
             if (Test-Path -LiteralPath $userSettingsPath) {
                 $settings = Read-JsonFile -Path $userSettingsPath
             }
-            if (-not $settings.ContainsKey('env') -or $null -eq $settings.env) {
+            if (-not $settings.Contains('env') -or $null -eq $settings.env) {
                 $settings.env = @{}
             }
 
@@ -743,12 +743,12 @@ if (-not $script:ToolRegistry.ContainsKey('claude')) {
             if (-not $authEnv) { $authEnv = 'ANTHROPIC_AUTH_TOKEN' }
 
             $clearOther = $true
-            if ($Profile.ContainsKey('clearOtherAuthEnv')) {
+            if ($Profile.Contains('clearOtherAuthEnv')) {
                 $clearOther = [bool]$Profile.clearOtherAuthEnv
             }
             if ($clearOther) {
                 foreach ($name in @('ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY')) {
-                    if ($name -ne $authEnv -and $settings.env.ContainsKey($name)) {
+                    if ($name -ne $authEnv -and $settings.env.Contains($name)) {
                         $settings.env.Remove($name)
                     }
                 }
@@ -760,7 +760,7 @@ if (-not $script:ToolRegistry.ContainsKey('claude')) {
             $modelEnvNames = @('ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
                                'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL')
             foreach ($name in $modelEnvNames) {
-                if ($settings.env.ContainsKey($name)) { $settings.env.Remove($name) }
+                if ($settings.env.Contains($name)) { $settings.env.Remove($name) }
             }
 
             $model = Get-ProfileValue -Map $Profile -Names @('model', 'anthropicModel')
@@ -773,7 +773,7 @@ if (-not $script:ToolRegistry.ContainsKey('claude')) {
             if ($sonnetModel) { $settings.env['ANTHROPIC_DEFAULT_SONNET_MODEL'] = $sonnetModel }
             if ($opusModel)   { $settings.env['ANTHROPIC_DEFAULT_OPUS_MODEL'] = $opusModel }
 
-            if ($Profile.ContainsKey('extraEnv') -and $Profile.extraEnv) {
+            if ($Profile.Contains('extraEnv') -and $Profile.extraEnv) {
                 foreach ($entry in $Profile.extraEnv.GetEnumerator()) {
                     $settings.env[$entry.Key] = "$($entry.Value)"
                 }
@@ -799,7 +799,7 @@ if (-not $script:ToolRegistry.ContainsKey('claude')) {
 }
 
 # Codex CLI tool — only register if not already present
-if (-not $script:ToolRegistry.ContainsKey('codex')) {
+if (-not $script:ToolRegistry.Contains('codex')) {
     $codexRoot = Join-Path $script:UserHome '.codex\provider-profiles'
     Register-ProviderTool @{
         name                 = 'codex'
@@ -864,7 +864,7 @@ if (-not $script:ToolRegistry.ContainsKey('codex')) {
             }
             foreach ($entry in $providerOptFields.GetEnumerator()) {
                 $val = $null
-                if ($Profile.ContainsKey($entry.Key) -and $null -ne $Profile[$entry.Key]) {
+                if ($Profile.Contains($entry.Key) -and $null -ne $Profile[$entry.Key]) {
                     $val = $Profile[$entry.Key]
                 }
                 if ($null -ne $val) {
@@ -874,13 +874,13 @@ if (-not $script:ToolRegistry.ContainsKey('codex')) {
 
             $objectFields = @('queryParams', 'httpHeaders', 'envHttpHeaders')
             foreach ($fieldName in $objectFields) {
-                if ($Profile.ContainsKey($fieldName) -and $Profile[$fieldName]) {
+                if ($Profile.Contains($fieldName) -and $Profile[$fieldName]) {
                     $tomlVal = ConvertTo-TomlLiteral -Value $Profile[$fieldName]
                     $overrides += @('-c', "model_providers.$providerId.$fieldName=$tomlVal")
                 }
             }
 
-            if ($Profile.ContainsKey('extraEnv') -and $Profile.extraEnv) {
+            if ($Profile.Contains('extraEnv') -and $Profile.extraEnv) {
                 foreach ($entry in $Profile.extraEnv.GetEnumerator()) {
                     Add-EnvSessionKey -Session $Session -Key "$($entry.Key)"
                 }
@@ -888,7 +888,7 @@ if (-not $script:ToolRegistry.ContainsKey('codex')) {
 
             $launchArgs = $overrides + $RemainingArgs
             $envVars = @{ $tempKeyEnv = $ApiKey }
-            if ($Profile.ContainsKey('extraEnv') -and $Profile.extraEnv) {
+            if ($Profile.Contains('extraEnv') -and $Profile.extraEnv) {
                 foreach ($entry in $Profile.extraEnv.GetEnumerator()) {
                     $envVars["$($entry.Key)"] = "$($entry.Value)"
                 }

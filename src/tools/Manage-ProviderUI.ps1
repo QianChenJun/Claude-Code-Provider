@@ -56,7 +56,7 @@ if ($Foreground) {
 }
 
 if ($state -eq 'Free') {
-    $proc = Start-Process -FilePath 'node' -ArgumentList @($server, '--port', $selectedPort, '--tool', $ToolName) \
+    $proc = Start-Process -FilePath 'node' -ArgumentList @($server, '--port', $selectedPort, '--tool', $ToolName) `
         -WorkingDirectory (Split-Path -Parent $root) -WindowStyle Hidden -PassThru
     $ready = $false
     for ($i = 0; $i -lt 30; $i++) {
