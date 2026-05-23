@@ -50,7 +50,7 @@ if ($state -eq 'Other') {
 }
 
 if ($Foreground) {
-    Start-Process "http://127.0.0.1:$selectedPort/" | Out-Null
+    Start-Process "http://127.0.0.1:$selectedPort/?tool=$ToolName" | Out-Null
     node $server --port $selectedPort --tool $ToolName
     exit $LASTEXITCODE
 }
@@ -69,5 +69,5 @@ if ($state -eq 'Free') {
     Write-Output "复用已运行的后台服务。"
 }
 
-Start-Process "http://127.0.0.1:$selectedPort/" | Out-Null
+Start-Process "http://127.0.0.1:$selectedPort/?tool=$ToolName" | Out-Null
 Write-Output "配置管理页面已打开：http://127.0.0.1:$selectedPort/"
