@@ -25,6 +25,12 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 
 安装后重新打开 PowerShell / Windows Terminal。
 
+如果想先预检安装会做什么、但不写入任何文件：
+
+```powershell
+.\install.ps1 -DryRun
+```
+
 ### 2. 配置供应商
 
 推荐使用配置向导：

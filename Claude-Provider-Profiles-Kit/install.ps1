@@ -10,7 +10,8 @@
 param(
     [switch]$OverwriteConfig,
     [switch]$AddPath,
-    [switch]$Configure
+    [switch]$Configure,
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +51,10 @@ function Copy-RequiredFile {
 
     if (-not (Test-Path -LiteralPath $Source)) {
         throw "缺少安装文件：$Source"
+    }
+    if ($DryRun) {
+        Write-Output "DRY-RUN 复制：$Source -> $Destination"
+        return
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destination) | Out-Null
     Copy-Item -LiteralPath $Source -Destination $Destination -Force
@@ -99,6 +104,25 @@ function Initialize-ConfigFile {
         [string]$LegacyPath
     )
 
+    if ($DryRun) {
+        if ($OverwriteConfig) {
+            if (-not (Test-Path -LiteralPath $TemplatePath)) {
+                throw "缺少安装文件：$TemplatePath"
+            }
+            Write-Output "DRY-RUN 将覆盖 $Name 配置：$TargetPath"
+        } elseif (Test-Path -LiteralPath $TargetPath) {
+            Write-Output "DRY-RUN 将保留已有 $Name 配置：$TargetPath"
+        } elseif ($LegacyPath -and (Test-Path -LiteralPath $LegacyPath)) {
+            Write-Output "DRY-RUN 将从旧目录迁移 $Name 配置：$LegacyPath -> $TargetPath"
+        } else {
+            if (-not (Test-Path -LiteralPath $TemplatePath)) {
+                throw "缺少安装文件：$TemplatePath"
+            }
+            Write-Output "DRY-RUN 将写入 $Name 配置模板：$TargetPath"
+        }
+        return
+    }
+
     if ($OverwriteConfig) {
         Copy-RequiredFile -Source $TemplatePath -Destination $TargetPath
         Write-Output "已写入 $Name 配置：$TargetPath"
@@ -126,6 +150,10 @@ function Ensure-UserPathItem {
     $items = if ($userPath) { $userPath -split ';' | Where-Object { $_ } } else { @() }
     $exists = $items | Where-Object { $_.TrimEnd('\') -ieq $PathItem.TrimEnd('\') }
     if ($exists) { return }
+    if ($DryRun -and $ShouldAdd) {
+        Write-Output "DRY-RUN 将加入用户 PATH：$PathItem"
+        return
+    }
     if ($ShouldAdd) {
         [Environment]::SetEnvironmentVariable('Path', (($items + $PathItem) -join ';'), 'User')
         Write-Output "已加入用户 PATH：$PathItem"
@@ -150,7 +178,7 @@ function Invoke-PostInstallConfigure {
 }
 
 # === Create target directories ===
-foreach ($dir in @(
+$targetDirs = @(
     (Join-Path $claudeRoot 'src\core'),
     (Join-Path $claudeRoot 'src\tools\claude'),
     (Join-Path $claudeRoot 'web'),
@@ -159,8 +187,13 @@ foreach ($dir in @(
     (Join-Path $codexRoot 'src\tools\codex'),
     (Join-Path $codexRoot 'web'),
     $codexBin
-)) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+)
+foreach ($dir in $targetDirs) {
+    if ($DryRun) {
+        Write-Output "DRY-RUN 创建目录：$dir"
+    } else {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
 }
 
 Write-Output "=== 部署核心模块 ==="
@@ -201,11 +234,16 @@ Initialize-ConfigFile `
 
 Write-Output "=== 生成快捷命令 ==="
 
-# Generate bin shims for Claude
-& (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1') | Out-Host
+if ($DryRun) {
+    Write-Output "DRY-RUN 将生成 Claude 快捷命令：$claudeBin"
+    Write-Output "DRY-RUN 将生成 Codex 快捷命令：$codexBin"
+} else {
+    # Generate bin shims for Claude
+    & (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1') | Out-Host
 
-# Generate bin shims for Codex
-& (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') | Out-Host
+    # Generate bin shims for Codex
+    & (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1') | Out-Host
+}
 
 Write-Output "=== PATH 管理 ==="
 Ensure-UserPathItem -PathItem $claudeBin -ShouldAdd:$AddPath
@@ -213,7 +251,11 @@ Ensure-UserPathItem -PathItem $codexBin  -ShouldAdd:$AddPath
 
 Write-Output ""
 Write-Output "========================================="
-Write-Output " 安装完成"
+if ($DryRun) {
+    Write-Output " 预检完成，未写入任何文件"
+} else {
+    Write-Output " 安装完成"
+}
 Write-Output "========================================="
 Write-Output ""
 Write-Output "Claude Code (ccp):"
@@ -233,7 +275,10 @@ if (-not $AddPath) {
     Write-Output "请重新打开 PowerShell / Windows Terminal 后使用快捷命令。"
 }
 
-if ($Configure) {
+if ($Configure -and $DryRun) {
+    Write-Output ""
+    Write-Output "DRY-RUN 已跳过配置向导"
+} elseif ($Configure) {
     Write-Output ""
     Write-Output "=== 配置向导 ==="
     Invoke-PostInstallConfigure
