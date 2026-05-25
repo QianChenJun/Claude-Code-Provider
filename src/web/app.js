@@ -319,8 +319,8 @@ async function syncShortcuts() {
 
 function switchTool(tool) {
   if (!TOOL_META[tool]) return;
-  if (tool === currentTool) return;
-  if (isDirty) {
+  // 仅在真正切到"另一个"工具且有未保存改动时弹确认
+  if (tool !== currentTool && isDirty) {
     const ok = confirm(`当前 ${TOOL_META[currentTool].displayName} 有未保存的改动，切换会丢弃。继续？`);
     if (!ok) return;
   }
