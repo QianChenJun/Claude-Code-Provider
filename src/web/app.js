@@ -47,6 +47,24 @@ let currentConfig = { version: 1, profiles: {} };
 let isDirty = false;
 function markDirty() { isDirty = true; }
 function markClean() { isDirty = false; }
+
+// per-tool 内存状态：切换 tab 时缓存当前 tab 的 DOM 卡片 + dirty 状态，
+// 切回来时直接 reattach，不重新从磁盘加载（保留未保存改动）
+const toolMemory = {};
+function captureCurrentToolState() {
+  const fragment = document.createDocumentFragment();
+  while (profilesEl.firstChild) fragment.appendChild(profilesEl.firstChild);
+  toolMemory[currentTool] = { fragment, dirty: isDirty };
+}
+function restoreToolState(tool) {
+  const mem = toolMemory[tool];
+  if (!mem) return false;
+  profilesEl.innerHTML = '';
+  profilesEl.appendChild(mem.fragment);
+  isDirty = mem.dirty;
+  delete toolMemory[tool];
+  return true;
+}
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
 const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
 const reservedCommandNames = new Set([
@@ -293,7 +311,6 @@ function collectConfig() {
 
 async function saveConfig(message) {
   const config = collectConfig();
-  markClean();
   const res = await fetch(`/api/${currentTool}/config`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
@@ -319,12 +336,12 @@ async function syncShortcuts() {
 
 function switchTool(tool) {
   if (!TOOL_META[tool]) return;
-  // 仅在真正切到"另一个"工具且有未保存改动时弹确认
-  if (tool !== currentTool && isDirty) {
-    const ok = confirm(`当前 ${TOOL_META[currentTool].displayName} 有未保存的改动，切换会丢弃。继续？`);
-    if (!ok) return;
+  const switching = tool !== currentTool;
+  // 切到不同工具：把当前 tool 的卡片 detach 到内存，未保存改动也跟着走
+  if (switching) {
+    captureCurrentToolState();
+    currentTool = tool;
   }
-  currentTool = tool;
   const meta = TOOL_META[tool];
 
   titleEl.textContent = meta.title;
@@ -339,7 +356,13 @@ function switchTool(tool) {
   url.searchParams.set('tool', tool);
   history.replaceState(null, '', url);
 
-  loadConfig().catch(e => setStatus(e.message, true));
+  // 优先从内存恢复（带未保存改动），没有缓存则从磁盘加载
+  if (restoreToolState(tool)) {
+    const hint = isDirty ? '（保留未保存改动）' : '';
+    setStatus(`已切到 ${meta.displayName}${hint}`);
+  } else {
+    loadConfig().catch(e => setStatus(e.message, true));
+  }
 }
 
 // Event handlers
