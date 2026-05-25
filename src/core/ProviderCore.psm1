@@ -286,18 +286,6 @@ function Upsert-ProviderProfile {
         }
     }
 
-    if (-not $ApiKeyEnv) {
-        $ApiKeyEnv = if ($profile.Contains('apiKeyEnv') -and $profile.apiKeyEnv) {
-            $profile.apiKeyEnv
-        }
-        else {
-            Get-DefaultApiKeyEnvName -ToolName $ToolName -ProfileId $ProfileId
-        }
-    }
-
-    foreach ($plainKeyField in @('apiKey', 'token', 'key')) {
-        if ($profile.Contains($plainKeyField)) { $profile.Remove($plainKeyField) }
-    }
 
     if ($DisplayName) {
         $profile['displayName'] = $DisplayName
@@ -307,7 +295,20 @@ function Upsert-ProviderProfile {
     }
 
     $profile['baseUrl'] = $BaseUrl
-    $profile['apiKeyEnv'] = $ApiKeyEnv
+
+    # ApiKey 默认写入 profile['apiKey']（明文存配置文件，简单直接）
+    if ($ApiKey) {
+        $profile['apiKey'] = $ApiKey
+        # 用户没显式指定 apiKeyEnv 时清掉已存在字段，避免 env 覆盖 config 导致新 key 不生效
+        if (-not $ApiKeyEnv -and $profile.Contains('apiKeyEnv')) {
+            $profile.Remove('apiKeyEnv')
+        }
+    }
+
+    # apiKeyEnv 仅在用户显式指定时设置（高级用法：从环境变量读 key）
+    if ($ApiKeyEnv) {
+        $profile['apiKeyEnv'] = $ApiKeyEnv
+    }
 
     if ($ToolName -eq 'claude') {
         if ($AuthEnv) {
@@ -323,7 +324,8 @@ function Upsert-ProviderProfile {
     $config.profiles[$ProfileId] = $profile
     Write-Utf8NoBomJson -Path $configPath -Value $config
 
-    if ($ApiKey -and $EnvironmentTarget -ne 'None') {
+    # 仅在用户显式选择 env 路径时写环境变量
+    if ($ApiKey -and $ApiKeyEnv -and $EnvironmentTarget -ne 'None') {
         [Environment]::SetEnvironmentVariable($ApiKeyEnv, $ApiKey, $EnvironmentTarget)
         Set-Item -LiteralPath "Env:\$ApiKeyEnv" -Value $ApiKey
     }
@@ -336,7 +338,7 @@ function Upsert-ProviderProfile {
         ToolName    = $ToolName
         ProfileId   = $ProfileId
         ConfigPath  = $configPath
-        ApiKeyEnv   = $ApiKeyEnv
+        ApiKeyEnv   = $(if ($profile.Contains('apiKeyEnv')) { $profile.apiKeyEnv } else { $null })
         Command     = "$($tool.commandPrefix) $ProfileId"
         Shortcut    = "$($tool.commandPrefix)-$ProfileId"
         Manager     = "$($tool.commandPrefix) manager"
@@ -372,7 +374,7 @@ function Invoke-ProviderSetup {
 
     Write-Output ""
     Write-Output "$($tool.displayName) 配置向导"
-    Write-Output "按回车可跳过可选项。API Key 会写入用户环境变量，不会写入 providers.json。"
+    Write-Output "按回车可跳过可选项。API Key 会写入 providers.json。"
     Write-Output ""
 
     while ($true) {
@@ -441,16 +443,14 @@ function Invoke-ProviderSetup {
     $model = (Read-Host $modelPrompt).Trim()
     if (-not $model) { $model = $defaultModel }
 
-    $defaultApiKeyEnv = if ($existingProfile.Contains('apiKeyEnv') -and $existingProfile.apiKeyEnv) {
-        $existingProfile.apiKeyEnv
+    $hasExistingApiKey = ($existingProfile.Contains('apiKey') -and $existingProfile.apiKey)
+    $apiKeyPrompt = if ($hasExistingApiKey) {
+        "API Key（直接保存到 providers.json；回车保留已有值，输入时不回显）"
     }
     else {
-        Get-DefaultApiKeyEnvName -ToolName $ToolName -ProfileId $ProfileId
+        "API Key（直接保存到 providers.json，输入时不回显）"
     }
-    $apiKeyEnv = (Read-Host "API Key 环境变量名（默认：$defaultApiKeyEnv）").Trim()
-    if (-not $apiKeyEnv) { $apiKeyEnv = $defaultApiKeyEnv }
-
-    $apiKey = Read-OptionalSecureString -Prompt "API Key（可选；输入时不会回显）"
+    $apiKey = Read-OptionalSecureString -Prompt $apiKeyPrompt
 
     $result = Upsert-ProviderProfile `
         -ToolName $ToolName `
@@ -459,8 +459,7 @@ function Invoke-ProviderSetup {
         -BaseUrl $baseUrl `
         -Model $model `
         -ApiKey $apiKey `
-        -ApiKeyEnv $apiKeyEnv `
-        -EnvironmentTarget 'User' `
+        -EnvironmentTarget 'None' `
         -Sync
 
     Write-Output ""
@@ -469,12 +468,13 @@ function Invoke-ProviderSetup {
     Write-Output "快捷命令：$($result.Shortcut)"
     Write-Output "管理页面：$($result.Manager)"
     if ($apiKey) {
-        Write-Output "API Key 已写入用户环境变量：$apiKeyEnv"
-        Write-Output "请重新打开 PowerShell / Windows Terminal，让新环境变量在所有终端生效。"
+        Write-Output "API Key 已写入 providers.json：$($result.ConfigPath)"
+    }
+    elseif ($hasExistingApiKey) {
+        Write-Output "保留已有 API Key（providers.json 内）"
     }
     else {
-        Write-Warning "未设置 API Key。稍后可执行："
-        Write-Warning "[Environment]::SetEnvironmentVariable('$apiKeyEnv', '你的 API Key', 'User')"
+        Write-Warning "未设置 API Key。可稍后编辑 providers.json 添加 apiKey 字段，或重新运行 setup 输入。"
     }
 }
 
