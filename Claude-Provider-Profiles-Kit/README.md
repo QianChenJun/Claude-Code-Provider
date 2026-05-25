@@ -20,6 +20,14 @@ node --version       # Web 管理页面需要 Node.js 18+，可选
 
 ## 推荐安装方式
 
+**最快 — 一键远程安装**（不用解压，直接粘贴）：
+
+```powershell
+iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1 | iex
+```
+
+**本地解压后安装**（你看到这份 README 大概率是这种场景）：
+
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
@@ -27,16 +35,22 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 
 安装后重新打开 PowerShell / Windows Terminal。
 
-如果想先预检安装会做什么、但不写入任何文件：
+预检（不写入任何文件）：
 
 ```powershell
 .\install.ps1 -DryRun
 ```
 
-如果想安装后立刻进入配置向导：
+安装后立刻进入配置向导：
 
 ```powershell
 .\install.ps1 -AddPath -Configure
+```
+
+远程版给参数（如 PATH + 配置向导）：
+
+```powershell
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath -Configure
 ```
 
 ---

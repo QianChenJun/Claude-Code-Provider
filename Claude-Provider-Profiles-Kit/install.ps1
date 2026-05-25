@@ -16,6 +16,46 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# === Remote bootstrap mode ===
+# 当通过 `iwr https://.../install.ps1 | iex` 执行时，脚本不在磁盘上：
+# $PSCommandPath 为空、$MyInvocation.MyCommand.Path 也为空。
+# 自动下载 main 分支 archive，解压后转发参数调用真正的 install.ps1。
+$invocationPath = try { $MyInvocation.MyCommand.Path } catch { $null }
+if ([string]::IsNullOrEmpty($PSCommandPath) -and [string]::IsNullOrEmpty($invocationPath)) {
+    $bootstrapUrl = if ($env:CPS_BOOTSTRAP_URL) { $env:CPS_BOOTSTRAP_URL } else {
+        'https://github.com/QianChenJun/Claude-Code-Provider/archive/refs/heads/main.zip'
+    }
+    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "cps-bootstrap-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    $zipPath = Join-Path $tempDir 'source.zip'
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+    Write-Output "[远程引导] 下载源码：$bootstrapUrl"
+    Invoke-WebRequest -Uri $bootstrapUrl -OutFile $zipPath -UseBasicParsing
+
+    Write-Output "[远程引导] 解压到：$tempDir"
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $tempDir -Force
+    Remove-Item -LiteralPath $zipPath -Force
+
+    # archive 解压后是 <repo>-main/ 目录，取第一个子目录
+    $extracted = Get-ChildItem -Path $tempDir -Directory | Select-Object -First 1
+    if (-not $extracted) { throw "解压后未找到源码目录：$tempDir" }
+    $kitInstaller = Join-Path $extracted.FullName 'Claude-Provider-Profiles-Kit\install.ps1'
+    if (-not (Test-Path -LiteralPath $kitInstaller)) {
+        throw "解压后未找到 install.ps1：$kitInstaller"
+    }
+
+    # 转发命名开关参数（顺序与 param() 一致）
+    $bootArgs = @{}
+    if ($OverwriteConfig) { $bootArgs.OverwriteConfig = $true }
+    if ($AddPath)         { $bootArgs.AddPath         = $true }
+    if ($Configure)       { $bootArgs.Configure       = $true }
+    if ($DryRun)          { $bootArgs.DryRun          = $true }
+
+    Write-Output "[远程引导] 调用本地 install.ps1（$kitInstaller）"
+    & $kitInstaller @bootArgs
+    return
+}
+
 $kitRoot    = Split-Path -Parent $MyInvocation.MyCommand.Path
 # Source: try Kit/src first (zip distribution), fall back to repo root src/ (development)
 $sourceRoot = Join-Path $kitRoot 'src'

@@ -18,6 +18,20 @@
 
 ### 1. 安装
 
+**一键远程安装（推荐）** — PowerShell 里粘贴一行，自动下载源码并安装到 `~/.claude` 与 `~/.codex`：
+
+```powershell
+iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1 | iex
+```
+
+需要传参数（如自动加 PATH + 安装后立即进入配置向导）：
+
+```powershell
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath -Configure
+```
+
+**或者下载 Release 包**（内网/无法访问 GitHub raw 时）：
+
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
@@ -25,10 +39,16 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 
 安装后重新打开 PowerShell / Windows Terminal。
 
-如果想先预检安装会做什么、但不写入任何文件：
+想先预检会做什么、但不写入任何文件：
 
 ```powershell
 .\install.ps1 -DryRun
+```
+
+远程版预检（需要用 scriptblock 形式才能传参）：
+
+```powershell
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -DryRun
 ```
 
 ### 2. 配置供应商
