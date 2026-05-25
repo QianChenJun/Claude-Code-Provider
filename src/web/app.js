@@ -284,7 +284,12 @@ async function saveConfig(message) {
   const payload = await res.json();
   if (!res.ok) throw new Error(payload.error || '保存失败');
   renderConfig(payload);
-  setStatus(message || `已保存 ${new Date().toLocaleTimeString()}`);
+  const ts = new Date().toLocaleTimeString();
+  // 后端保存成功时已自动同步快捷命令，syncOutput 为同步脚本输出（含 "同步失败：" 前缀代表失败）
+  const sync = payload.syncOutput || '';
+  const syncFailed = sync.startsWith('同步失败');
+  const base = message || `已保存并同步 ${ts}`;
+  setStatus(syncFailed ? `${base}（${sync}）` : base, syncFailed);
 }
 
 async function syncShortcuts() {
@@ -326,14 +331,6 @@ document.querySelector('#save-config').addEventListener('click', async () => {
   try { await saveConfig(); } catch (e) { setStatus(e.message, true); }
 });
 
-document.querySelector('#save-sync-config').addEventListener('click', async () => {
-  try {
-    setStatus('正在保存并同步...');
-    await saveConfig('已保存，正在同步快捷命令...');
-    await syncShortcuts();
-    setStatus(`已保存并同步 ${new Date().toLocaleTimeString()}`);
-  } catch (e) { setStatus(e.message, true); }
-});
 
 document.querySelector('#reload-config').addEventListener('click', async () => {
   try { await loadConfig(); } catch (e) { setStatus(e.message, true); }

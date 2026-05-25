@@ -135,9 +135,10 @@ try {
         -Method Put `
         -ContentType 'application/json' `
         -Body ($newCodexConfig | ConvertTo-Json -Depth 20) `
-        -TimeoutSec 5
+        -TimeoutSec 60
 
     Assert-True -Condition (Test-JsonProperty -Object $putResult.profiles -Name 'saved_codex') -Message 'Codex PUT 应返回保存后的配置'
+    Assert-True -Condition (Test-JsonProperty -Object $putResult -Name 'syncOutput') -Message 'Codex PUT 应自动同步快捷命令并返回 syncOutput'
 
     $claudeFile = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($claudeConfigPath)) | ConvertFrom-Json
     $codexFile = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($codexConfigPath)) | ConvertFrom-Json

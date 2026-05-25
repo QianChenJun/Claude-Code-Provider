@@ -314,7 +314,16 @@ const server = http.createServer(async (req, res) => {
         }
 
         await writeConfig(tool, next);
-        sendJson(res, 200, next);
+        // 保存即同步：自动重建 bin/*.ps1 shim，免去用户再点"同步"按钮
+        let syncOutput = '';
+        try {
+          const r = await runPwshScript(tool.syncScript);
+          syncOutput = `${r.stdout}${r.stderr}`.trim();
+        } catch (err) {
+          // 配置已保存成功；只是 shim 生成失败 — 仍返回 200，由前端展示同步异常
+          syncOutput = `同步失败：${err.message || err}`;
+        }
+        sendJson(res, 200, { ...next, syncOutput });
         return;
       }
 
