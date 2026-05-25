@@ -14,10 +14,10 @@ Import-ProviderCore
 
 $tool = Get-ProviderTool -Name $ToolName
 
-# 默认端口映射
+# 统一端口：ccp 与 cdp 共用单个 server 进程，浏览器靠 ?tool= 参数切换 tab
+# server 的 /api/{tool}/... 路由根据 tool 名直接定位 config + sync 脚本，跟启动时的 root 无关
 if ($Port -eq 0) {
-    $portMap = @{ claude = 15723; codex = 15724 }
-    $Port = if ($portMap.ContainsKey($ToolName)) { $portMap[$ToolName] } else { 15730 }
+    $Port = 15723
 }
 
 function Get-ManagerState {
