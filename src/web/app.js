@@ -340,8 +340,20 @@ document.querySelector('#add-profile').addEventListener('click', () => {
   profilesEl.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
-document.querySelector('#save-config').addEventListener('click', async () => {
-  try { await saveConfig(); } catch (e) { setStatus(e.message, true); }
+document.querySelector('#save-config').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '保存并同步中…';
+  setStatus('正在保存并同步快捷命令…');
+  try {
+    await saveConfig();
+  } catch (e) {
+    setStatus(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 });
 
 
