@@ -163,7 +163,12 @@ function renderProfile(id, profile = {}, options = {}) {
 
   for (const key of meta.stringKeys) {
     const field = getField(node, key);
-    if (field) field.value = profile[key] || '';
+    if (!field) continue;
+    if (key === 'shortcut' && !profile[key] && id) {
+      field.value = `${id}-${meta.suffix}`;  // 默认推荐值，可被联动覆盖
+    } else {
+      field.value = profile[key] || '';
+    }
   }
 
   for (const key of meta.numberKeys) {
@@ -180,6 +185,22 @@ function renderProfile(id, profile = {}, options = {}) {
     const field = getField(node, key);
     if (field) field.value = profile[key] ? JSON.stringify(profile[key], null, 2) : '';
   }
+
+  // ID → shortcut 联动：编辑 ID 时自动填 `${id}-${suffix}`，除非用户已显式改过 shortcut
+  const idField = getField(node, 'id');
+  const shortcutField = getField(node, 'shortcut');
+  // 初始已有显式 shortcut（且与默认值不同）→ 标记为已自定义，不再联动
+  const initialShortcut = (profile.shortcut || '').trim();
+  const defaultInitial = id ? `${id}-${meta.suffix}` : '';
+  node.dataset.shortcutTouched = (initialShortcut && initialShortcut !== defaultInitial) ? '1' : '';
+  shortcutField.addEventListener('input', () => {
+    node.dataset.shortcutTouched = shortcutField.value.trim() ? '1' : '';
+  });
+  idField.addEventListener('input', () => {
+    if (node.dataset.shortcutTouched) return;
+    const newId = idField.value.trim();
+    shortcutField.value = newId ? `${newId}-${meta.suffix}` : '';
+  });
 
   node.querySelector('[data-action="toggle"]').addEventListener('click', () => {
     setCollapsed(node, !node.classList.contains('collapsed'));
@@ -313,9 +334,9 @@ function switchTool(tool) {
 
 // Event handlers
 document.querySelector('#add-profile').addEventListener('click', () => {
-  const meta = TOOL_META[currentTool];
   const id = `new_${Date.now().toString().slice(-5)}`;
-  renderProfile(id, { shortcut: `${id}-${meta.suffix}` }, { expanded: true });
+  // 不传 shortcut，让 ID→shortcut 联动接管（用户改 ID 时自动跟随）
+  renderProfile(id, {}, { expanded: true });
   profilesEl.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
