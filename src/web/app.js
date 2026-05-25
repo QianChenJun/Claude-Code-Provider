@@ -48,11 +48,8 @@ const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
 const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
 const reservedCommandNames = new Set([
   'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
-  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager',
-  'mi-claude', 'ds-claude', 'provider-claude', 'claude-profile-manager', 'sync-claude-profiles',
-  'mi-codex', 'ds-codex', 'provider-codex', 'codex-profile-manager', 'sync-codex-profiles'
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager'
 ]);
-const legacyProfileCommandNames = new Set(['mi-claude', 'ds-claude', 'mi-codex', 'ds-codex']);
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -253,20 +250,15 @@ function collectConfig() {
     }
 
     const shortcut = profile.shortcut || `${id}-${meta.suffix}`;
-    const allowLegacyShortcut = !profile.shortcut && legacyProfileCommandNames.has(shortcut.toLowerCase());
-    const cmdNames = [
-      { name: shortcut, allowLegacyProfileCommand: allowLegacyShortcut },
-      { name: `${meta.prefix}-${id}`, allowLegacyProfileCommand: false },
-      { name: id, allowLegacyProfileCommand: false }
-    ];
+    const cmdNames = [shortcut, `${meta.prefix}-${id}`, id];
 
-    for (const cmd of cmdNames) {
-      if (!profileIdPattern.test(cmd.name)) throw new Error(`${id}: 快捷命令不合法：${cmd.name}`);
-      const key = cmd.name.toLowerCase();
-      if (reservedCommandNames.has(key) && !(cmd.allowLegacyProfileCommand && legacyProfileCommandNames.has(key))) {
-        throw new Error(`${id}: 快捷命令与内置命令冲突：${cmd.name}`);
+    for (const name of cmdNames) {
+      if (!profileIdPattern.test(name)) throw new Error(`${id}: 快捷命令不合法：${name}`);
+      const key = name.toLowerCase();
+      if (reservedCommandNames.has(key)) {
+        throw new Error(`${id}: 快捷命令与内置命令冲突：${name}`);
       }
-      if (usedCmds.has(key)) throw new Error(`${id}: 快捷命令与 ${usedCmds.get(key)} 冲突：${cmd.name}`);
+      if (usedCmds.has(key)) throw new Error(`${id}: 快捷命令与 ${usedCmds.get(key)} 冲突：${name}`);
       usedCmds.set(key, id);
     }
     profiles[id] = profile;

@@ -79,11 +79,8 @@ const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
 const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
 const reservedCommandNames = new Set([
   'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
-  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager',
-  'mi-claude', 'ds-claude', 'provider-claude', 'claude-profile-manager', 'sync-claude-profiles',
-  'mi-codex', 'ds-codex', 'provider-codex', 'codex-profile-manager', 'sync-codex-profiles'
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager'
 ]);
-const legacyProfileCommandNames = new Set(['mi-claude', 'ds-claude', 'mi-codex', 'ds-codex']);
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -200,12 +197,9 @@ function validateProfileId(id) {
   return null;
 }
 
-function validateProfileCommandName(name, { allowLegacyProfileCommand = false } = {}) {
+function validateProfileCommandName(name) {
   if (!profileIdPattern.test(name)) return '快捷命令格式不合法';
-  const key = name.toLowerCase();
-  if (reservedCommandNames.has(key) && !(allowLegacyProfileCommand && legacyProfileCommandNames.has(key))) {
-    return '快捷命令与内置命令冲突';
-  }
+  if (reservedCommandNames.has(name.toLowerCase())) return '快捷命令与内置命令冲突';
   return null;
 }
 
@@ -291,21 +285,14 @@ const server = http.createServer(async (req, res) => {
           const suffix = toolName === 'codex' ? 'codex' : 'claude';
           const prefix = toolName === 'codex' ? 'cdp' : 'ccp';
           const shortcut = profile.shortcut || `${id}-${suffix}`;
-          const allowLegacyShortcut = !profile.shortcut && legacyProfileCommandNames.has(shortcut.toLowerCase());
-          const cmdNames = [
-            { name: shortcut, allowLegacyProfileCommand: allowLegacyShortcut },
-            { name: `${prefix}-${id}`, allowLegacyProfileCommand: false },
-            { name: id, allowLegacyProfileCommand: false }
-          ];
+          const cmdNames = [shortcut, `${prefix}-${id}`, id];
 
-          for (const cmd of cmdNames) {
-            const cmdErr = validateProfileCommandName(cmd.name, {
-              allowLegacyProfileCommand: cmd.allowLegacyProfileCommand
-            });
-            if (cmdErr) { sendJson(res, 400, { error: `${id}: ${cmdErr}：${cmd.name}` }); return; }
-            const key = cmd.name.toLowerCase();
+          for (const name of cmdNames) {
+            const cmdErr = validateProfileCommandName(name);
+            if (cmdErr) { sendJson(res, 400, { error: `${id}: ${cmdErr}：${name}` }); return; }
+            const key = name.toLowerCase();
             if (usedCommands.has(key)) {
-              sendJson(res, 400, { error: `${id}: 快捷命令与 ${usedCommands.get(key)} 冲突：${cmd.name}` });
+              sendJson(res, 400, { error: `${id}: 快捷命令与 ${usedCommands.get(key)} 冲突：${name}` });
               return;
             }
             usedCommands.set(key, id);

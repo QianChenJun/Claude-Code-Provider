@@ -153,6 +153,28 @@ try {
     }
     Assert-True -Condition $profileIdConflictFailed -Message '配置 ID 不应覆盖 ccp-setup 等内置命令'
 
+    # === Regression: mi / ds 作为普通配置 ID（不再被内置占用）===
+    foreach ($profileId in @('mi', 'ds')) {
+        Upsert-ProviderProfile `
+            -ToolName 'codex' `
+            -ProfileId $profileId `
+            -DisplayName "供应商 $profileId" `
+            -BaseUrl "https://example.test/$profileId" `
+            -Model 'test-model' `
+            -ApiKey "sk-$profileId" `
+            -EnvironmentTarget 'Process' `
+            -Sync:$false | Out-Null
+    }
+    Sync-ToolShortcuts -ToolName 'codex' | Out-Null
+    $codexBin = Join-Path $tempHome '.codex\bin'
+    foreach ($profileId in @('mi', 'ds')) {
+        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "$profileId.ps1")) -Message "应生成 $profileId.ps1（配置 ID 直呼）"
+        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "$profileId-codex.ps1")) -Message "应生成 $profileId-codex.ps1（默认 shortcut）"
+        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "cdp-$profileId.ps1")) -Message "应生成 cdp-$profileId.ps1（前缀形式）"
+    }
+    Remove-Item Env:\MI_CODEX_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:\DS_CODEX_API_KEY -ErrorAction SilentlyContinue
+
     $invalidUrlFailed = $false
     try {
         Upsert-ProviderProfile `

@@ -223,13 +223,8 @@ function Assert-ProviderProfileInput {
         $prefix = $Tool.commandPrefix
         $suffix = $Tool.defaultShortcutSuffix
         $reservedCmdNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-        foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "provider-$($Tool.name)")) {
+        foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager")) {
             [void]$reservedCmdNames.Add($name)
-        }
-        if ($Tool.Contains('legacyCommands') -and $Tool.legacyCommands) {
-            foreach ($name in $Tool.legacyCommands) {
-                [void]$reservedCmdNames.Add($name)
-            }
         }
 
         if ($reservedCmdNames.Contains($ProfileId)) {
@@ -237,8 +232,7 @@ function Assert-ProviderProfileInput {
         }
 
         $defaultShortcut = "$ProfileId-$suffix"
-        $legacyProfileCmds = @("mi-$suffix", "ds-$suffix")
-        if ($reservedCmdNames.Contains($defaultShortcut) -and $defaultShortcut -notin $legacyProfileCmds) {
+        if ($reservedCmdNames.Contains($defaultShortcut)) {
             throw "配置 ID 会生成冲突的默认快捷命令：$defaultShortcut"
         }
     }
@@ -795,27 +789,13 @@ function Sync-ToolShortcuts {
     $usedShortcutNames  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reservedProfileIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reservedCmdNames   = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    $legacyProfileCmds  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
     foreach ($name in @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure')) {
         [void]$reservedProfileIds.Add($name)
     }
-    foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "provider-$($tool.name)")) {
+    foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager")) {
         [void]$reservedCmdNames.Add($name)
         [void]$usedShortcutNames.Add($name.ToLowerInvariant())
-    }
-
-    if ($tool.Contains('legacyCommands') -and $tool.legacyCommands) {
-        foreach ($name in $tool.legacyCommands) {
-            [void]$reservedCmdNames.Add($name)
-            [void]$usedShortcutNames.Add($name.ToLowerInvariant())
-        }
-    }
-    foreach ($legacyProfileId in @('mi', 'ds')) {
-        $legacyProfileCmd = "$legacyProfileId-$suffix"
-        if ($reservedCmdNames.Contains($legacyProfileCmd)) {
-            [void]$legacyProfileCmds.Add($legacyProfileCmd)
-        }
     }
 
     function Write-Shim {
@@ -834,14 +814,10 @@ function Sync-ToolShortcuts {
     function Register-ProfileShortcutName {
         param(
             [string]$Name,
-            [string]$Owner,
-            [bool]$AllowLegacyProfileCommand = $false
+            [string]$Owner
         )
         Assert-ShortcutName -Name $Name
         if ($reservedCmdNames.Contains($Name)) {
-            if ($AllowLegacyProfileCommand -and $legacyProfileCmds.Contains($Name)) {
-                return
-            }
             throw "快捷命令与内置命令冲突：$Name"
         }
         $key = $Name.ToLowerInvariant()
@@ -861,12 +837,6 @@ function Sync-ToolShortcuts {
     $invokeScript = $tool.invokeScript
     $syncScript   = $tool.syncScript
     $manageScript = $tool.manageScript
-
-    Write-Shim -Path (Join-Path $binDir "provider-$($tool.name).ps1") -Content @"
-#!/usr/bin/env pwsh
-& '$invokeScript' @args
-exit `$LASTEXITCODE
-"@
 
     Write-Shim -Path (Join-Path $binDir "$prefix.ps1") -Content @"
 #!/usr/bin/env pwsh
@@ -898,16 +868,6 @@ exit `$LASTEXITCODE
 exit `$LASTEXITCODE
 "@
 
-    if ($tool.Contains('legacyCommands') -and $tool.legacyCommands) {
-        foreach ($legacy in $tool.legacyCommands) {
-            Write-Shim -Path (Join-Path $binDir "$legacy.ps1") -Content @"
-#!/usr/bin/env pwsh
-& '$invokeScript' @args
-exit `$LASTEXITCODE
-"@
-        }
-    }
-
     Write-Output "已同步：$prefix / $prefix-list / $prefix-setup / $prefix-sync / $prefix-manager"
 
     foreach ($entry in $config.profiles.GetEnumerator()) {
@@ -921,13 +881,12 @@ exit `$LASTEXITCODE
 
         $shortcut = Get-ProfileValue -Map $profile -Names @('shortcut')
         if (-not $shortcut) { $shortcut = "$id-$suffix" }
-        $allowLegacyShortcut = ($shortcut -ieq "$id-$suffix" -and $legacyProfileCmds.Contains($shortcut))
-        Register-ProfileShortcutName -Name $shortcut -Owner $id -AllowLegacyProfileCommand:$allowLegacyShortcut
+        Register-ProfileShortcutName -Name $shortcut -Owner $id
 
         $prefixedCmd = "$prefix-$id"
         Register-ProfileShortcutName -Name $prefixedCmd -Owner $id
 
-        # 配置 ID 直呼快捷命令（如 mi / ds / gpt），配置 ID 唯一，无需前后缀
+        # 配置 ID 直呼快捷命令：用户自定义 ID 即命令名，无需前后缀
         Register-ProfileShortcutName -Name $id -Owner $id
 
         $shortcutContent = @"
@@ -1030,7 +989,6 @@ if (-not $script:ToolRegistry.Contains('claude')) {
         defaultShortcutSuffix = 'claude'
         executable           = 'claude'
         profileRoot          = '.claude\provider-profiles'
-        legacyCommands       = @('mi-claude', 'ds-claude', 'provider-claude', 'claude-profile-manager', 'sync-claude-profiles')
         envKeys              = @('ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY',
                                  'ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
                                  'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL')
@@ -1120,7 +1078,6 @@ if (-not $script:ToolRegistry.Contains('codex')) {
         defaultShortcutSuffix = 'codex'
         executable           = 'codex'
         profileRoot          = '.codex\provider-profiles'
-        legacyCommands       = @('mi-codex', 'ds-codex', 'provider-codex', 'codex-profile-manager', 'sync-codex-profiles')
         envKeys              = @()
         configPath           = (Join-Path $codexRoot 'providers.json')
         invokeScript         = (Join-Path $codexRoot 'src\tools\codex\Invoke-CodexProvider.ps1')
