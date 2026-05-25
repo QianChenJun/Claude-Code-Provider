@@ -8,7 +8,7 @@ const tabsEl = document.querySelector('#tool-tabs');
 const TOOL_META = {
   claude: {
     displayName: 'Claude Code',
-    title: 'Claude Code 供应商配置',
+    title: 'Claude Code 配置',
     summary: '保留原配置，只覆盖 Anthropic 兼容接口地址、API Key 和模型映射。',
     configHint: '%USERPROFILE%\\.claude\\provider-profiles\\providers.json',
     templateId: 'template-claude',
@@ -25,7 +25,7 @@ const TOOL_META = {
   },
   codex: {
     displayName: 'Codex CLI',
-    title: 'Codex CLI 供应商配置',
+    title: 'Codex CLI 配置',
     summary: '保留原配置，只覆盖 OpenAI 兼容接口地址、API Key 和模型。通过 codex -c 临时注入。',
     configHint: '%USERPROFILE%\\.codex\\provider-profiles\\providers.json',
     templateId: 'template-codex',
@@ -44,6 +44,9 @@ const TOOL_META = {
 
 let currentTool = 'claude';
 let currentConfig = { version: 1, profiles: {} };
+let isDirty = false;
+function markDirty() { isDirty = true; }
+function markClean() { isDirty = false; }
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
 const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
 const reservedCommandNames = new Set([
@@ -209,7 +212,7 @@ function renderProfile(id, profile = {}, options = {}) {
     try { duplicateProfile(node); } catch (e) { setStatus(e.message, true); }
   });
   node.querySelector('[data-action="remove"]').addEventListener('click', () => removeProfile(node));
-  node.addEventListener('input', () => updatePreview(node));
+  node.addEventListener('input', () => { markDirty(); updatePreview(node); });
   updatePreview(node);
   setCollapsed(node, !options.expanded);
   profilesEl.appendChild(node);
@@ -246,6 +249,7 @@ async function loadConfig() {
   const res = await fetch(`/api/${currentTool}/config`, { cache: 'no-store' });
   if (!res.ok) throw new Error(await res.text());
   renderConfig(await res.json());
+  markClean();
   setStatus(`已加载 ${TOOL_META[currentTool].displayName} 配置`);
 }
 
@@ -289,6 +293,7 @@ function collectConfig() {
 
 async function saveConfig(message) {
   const config = collectConfig();
+  markClean();
   const res = await fetch(`/api/${currentTool}/config`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
@@ -314,6 +319,11 @@ async function syncShortcuts() {
 
 function switchTool(tool) {
   if (!TOOL_META[tool]) return;
+  if (tool === currentTool) return;
+  if (isDirty) {
+    const ok = confirm(`当前 ${TOOL_META[currentTool].displayName} 有未保存的改动，切换会丢弃。继续？`);
+    if (!ok) return;
+  }
   currentTool = tool;
   const meta = TOOL_META[tool];
 
@@ -334,6 +344,7 @@ function switchTool(tool) {
 
 // Event handlers
 document.querySelector('#add-profile').addEventListener('click', () => {
+  markDirty();
   const id = `new_${Date.now().toString().slice(-5)}`;
   // 不传 shortcut，让 ID→shortcut 联动接管（用户改 ID 时自动跟随）
   renderProfile(id, {}, { expanded: true });

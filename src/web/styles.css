@@ -62,9 +62,11 @@ body {
 
 h1 {
   margin: 0;
-  font-size: clamp(38px, 6vw, 74px);
-  line-height: .9;
-  letter-spacing: -0.055em;
+  font-size: clamp(28px, 4.2vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  word-break: keep-all;
 }
 
 .summary {
