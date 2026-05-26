@@ -870,7 +870,7 @@ exit `$LASTEXITCODE
 
     Write-Output "已同步：$prefix / $prefix-list / $prefix-setup / $prefix-sync / $prefix-manager"
 
-    foreach ($entry in $config.profiles.GetEnumerator()) {
+    foreach ($entry in ($config.profiles.GetEnumerator() | Sort-Object { $_.Key })) {
         $id      = $entry.Key
         $profile = $entry.Value
 

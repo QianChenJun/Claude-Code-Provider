@@ -258,7 +258,8 @@ function updatePreview(card) {
 function renderConfig(config) {
   profilesEl.innerHTML = '';
   currentConfig = config;
-  for (const [id, profile] of Object.entries(config.profiles || {})) {
+  const entries = Object.entries(config.profiles || {}).sort(([a], [b]) => a.localeCompare(b));
+  for (const [id, profile] of entries) {
     renderProfile(id, profile);
   }
 }
