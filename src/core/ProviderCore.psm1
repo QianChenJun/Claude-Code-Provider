@@ -1092,9 +1092,16 @@ if (-not $script:ToolRegistry.Contains('codex')) {
                 throw "当前仅支持 Codex 官方文档支持的 responses provider：$ProfileId"
             }
 
-            $safeProfile = (($ProfileId -replace '[^A-Za-z0-9_]', '_').Trim('_'))
-            $providerId  = "cdp_$safeProfile"
-            $tempKeyEnv  = "CODEX_PROVIDER_TOKEN_$($safeProfile.ToUpperInvariant())"
+            # 检测是否为 resume 模式：resume 时使用固定 providerId，使所有 profile 的会话互相可见
+            $isResume = $RemainingArgs -contains 'resume'
+            if ($isResume) {
+                $providerId = 'cdp_resume'
+                $tempKeyEnv = 'CODEX_PROVIDER_TOKEN_RESUME'
+            } else {
+                $safeProfile = (($ProfileId -replace '[^A-Za-z0-9_]', '_').Trim('_'))
+                $providerId  = "cdp_$safeProfile"
+                $tempKeyEnv  = "CODEX_PROVIDER_TOKEN_$($safeProfile.ToUpperInvariant())"
+            }
 
             Add-EnvSessionKey -Session $Session -Key $tempKeyEnv
 
