@@ -25,3 +25,6 @@ Desktop.ini
 # Claude Code local
 .claude/settings.local.json
 .ace-tool/
+
+# Local browser automation artifacts
+.playwright-mcp/

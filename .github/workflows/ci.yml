@@ -61,4 +61,4 @@ jobs:
             echo "Checking $f"
             node --check "$f"
           done
-          echo "All $($files.Count) file(s) OK."
+          echo "All ${#files[@]} file(s) OK."
