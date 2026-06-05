@@ -34,6 +34,115 @@ try {
 
     Import-Module (Join-Path $repoRoot 'src\core\ProviderCore.psm1') -Force -DisableNameChecking
 
+    $menuOrderProfiles = [ordered]@{
+        zeta  = [ordered]@{ displayName = 'Zeta'; baseUrl = 'https://example.test/zeta' }
+        Alpha = [ordered]@{ displayName = 'Alpha'; baseUrl = 'https://example.test/alpha' }
+        beta  = [ordered]@{ displayName = 'Beta'; baseUrl = 'https://example.test/beta' }
+    }
+    $menuText = Write-ProfileTable -Profiles $menuOrderProfiles -Tool (Get-ProviderTool -Name 'claude') | Out-String -Width 200
+    $alphaPos = $menuText.IndexOf('ccp-Alpha', [System.StringComparison]::Ordinal)
+    $betaPos = $menuText.IndexOf('ccp-beta', [System.StringComparison]::Ordinal)
+    $zetaPos = $menuText.IndexOf('ccp-zeta', [System.StringComparison]::Ordinal)
+    Assert-True -Condition ($alphaPos -ge 0 -and $betaPos -ge 0 -and $zetaPos -ge 0) -Message '菜单列表应包含全部测试配置'
+    Assert-True -Condition ($alphaPos -lt $betaPos -and $betaPos -lt $zetaPos) -Message '菜单列表应按配置 ID 的 OrdinalIgnoreCase 顺序稳定展示'
+
+    $launcherFailConfigPath = Join-Path $tempHome 'launcher-fail\providers.json'
+    $launcherFailTempPath = Join-Path $tempHome 'launcher-fail-temp.json'
+    $launcherFailEnvName = "PROVIDER_PROFILE_LAUNCHER_FAIL_KEY_$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $launcherFailConfigPath) | Out-Null
+    Write-Utf8NoBomJson -Path $launcherFailConfigPath -Value ([ordered]@{
+        version  = 1
+        profiles = [ordered]@{
+            fail = [ordered]@{
+                baseUrl  = 'https://example.test/launcher-fail'
+                apiKey   = 'sk-launcher-fail'
+                tempPath = $launcherFailTempPath
+                envName  = $launcherFailEnvName
+            }
+        }
+    })
+    Register-ProviderTool @{
+        name                  = 'launcher-fail'
+        commandPrefix         = 'lfp'
+        configFileName        = 'providers.json'
+        displayName           = 'Launcher Fail'
+        defaultShortcutSuffix = 'launcher-fail'
+        executable            = 'unused'
+        configPath            = $launcherFailConfigPath
+        launcher              = {
+            param($Profile, $ApiKey, $ProfileId, $RemainingArgs, $Session)
+            Add-EnvSessionTempFile -Session $Session -Path $Profile.tempPath
+            [System.IO.File]::WriteAllText($Profile.tempPath, 'temp', [System.Text.UTF8Encoding]::new($false))
+            Add-EnvSessionKey -Session $Session -Key $Profile.envName
+            Set-Item -LiteralPath "Env:\$($Profile.envName)" -Value 'changed'
+            throw 'launcher failed after temp file'
+        }
+    }
+
+    $launcherFailed = $false
+    try {
+        Invoke-ProviderSession -ToolName 'launcher-fail' -ProfileId 'fail'
+    } catch {
+        $launcherFailed = $true
+    }
+    Assert-True -Condition $launcherFailed -Message 'launcher 抛错应向上传递'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $launcherFailTempPath)) -Message 'launcher 返回前抛错时应清理已登记的临时文件'
+    Assert-True -Condition (-not (Get-Item -LiteralPath "Env:\$launcherFailEnvName" -ErrorAction SilentlyContinue)) -Message 'launcher 抛错时应恢复临时环境变量'
+
+    $cliFailConfigPath = Join-Path $tempHome 'cli-fail\providers.json'
+    $cliFailTempPath = Join-Path $tempHome 'cli-fail-temp.json'
+    $cliFailEnvName = "PROVIDER_PROFILE_CLI_FAIL_KEY_$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $cliFailConfigPath) | Out-Null
+    Write-Utf8NoBomJson -Path $cliFailConfigPath -Value ([ordered]@{
+        version  = 1
+        profiles = [ordered]@{
+            fail = [ordered]@{
+                baseUrl  = 'https://example.test/cli-fail'
+                apiKey   = 'sk-cli-fail'
+                tempPath = $cliFailTempPath
+                envName  = $cliFailEnvName
+            }
+        }
+    })
+    Register-ProviderTool @{
+        name                  = 'cli-fail'
+        commandPrefix         = 'cfp'
+        configFileName        = 'providers.json'
+        displayName           = 'CLI Fail'
+        defaultShortcutSuffix = 'cli-fail'
+        executable            = '__provider_profile_missing_executable__'
+        configPath            = $cliFailConfigPath
+        launcher              = {
+            param($Profile, $ApiKey, $ProfileId, $RemainingArgs, $Session)
+            [System.IO.File]::WriteAllText($Profile.tempPath, 'temp', [System.Text.UTF8Encoding]::new($false))
+            $envVars = @{}
+            $envVars[$Profile.envName] = 'changed'
+            return @{
+                LaunchArgs = @()
+                EnvVars    = $envVars
+                TempFile   = $Profile.tempPath
+            }
+        }
+    }
+
+    $cliFailed = $false
+    try {
+        Invoke-ProviderSession -ToolName 'cli-fail' -ProfileId 'fail'
+    } catch {
+        $cliFailed = $true
+    }
+    Assert-True -Condition $cliFailed -Message 'CLI 启动失败应向上传递'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $cliFailTempPath)) -Message 'CLI 启动失败时应清理 launcher 返回的临时文件'
+    Assert-True -Condition (-not (Get-Item -LiteralPath "Env:\$cliFailEnvName" -ErrorAction SilentlyContinue)) -Message 'CLI 启动失败时应恢复临时环境变量'
+
+    $duplicateEnvName = "PROVIDER_PROFILE_DUP_ENV_$([guid]::NewGuid().ToString('N'))"
+    $duplicateSession = New-EnvSession
+    Add-EnvSessionKey -Session $duplicateSession -Key $duplicateEnvName
+    Set-Item -LiteralPath "Env:\$duplicateEnvName" -Value 'changed'
+    Add-EnvSessionKey -Session $duplicateSession -Key $duplicateEnvName
+    Restore-EnvSession -Session $duplicateSession
+    Assert-True -Condition (-not (Get-Item -LiteralPath "Env:\$duplicateEnvName" -ErrorAction SilentlyContinue)) -Message '重复登记同一环境变量不应覆盖第一次记录的原始值'
+
     Assert-Equal `
         -Actual (Get-DefaultApiKeyEnvName -ToolName 'claude' -ProfileId 'mi-test') `
         -Expected 'MI_TEST_CLAUDE_API_KEY' `
@@ -106,6 +215,19 @@ try {
         $reservedCommandProfileFailed = $true
     }
     Assert-True -Condition $reservedCommandProfileFailed -Message 'Upsert 阶段应拒绝会覆盖内置命令的配置 ID'
+
+    $reservedProfilesCommandFailed = $false
+    try {
+        Upsert-ProviderProfile `
+            -ToolName 'claude' `
+            -ProfileId 'profiles' `
+            -BaseUrl 'https://example.test/anthropic' `
+            -EnvironmentTarget 'Process' `
+            -Sync:$false | Out-Null
+    } catch {
+        $reservedProfilesCommandFailed = $true
+    }
+    Assert-True -Condition $reservedProfilesCommandFailed -Message 'Upsert 阶段应拒绝 profiles 配置 ID，避免覆盖导入导出子命令'
 
     Sync-ToolShortcuts -ToolName 'claude' | Out-Null
     $binDir = Join-Path $tempHome '.claude\bin'
@@ -190,6 +312,16 @@ try {
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "$profileId-codex.ps1")) -Message "应生成 $profileId-codex.ps1（默认 shortcut）"
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "cdp-$profileId.ps1")) -Message "应生成 cdp-$profileId.ps1（前缀形式）"
         Assert-Equal -Actual $codexConfig.profiles.$profileId.apiKey -Expected "sk-$profileId" -Message "$profileId 应把 apiKey 直接写入 providers.json"
+    }
+
+    $codexConfigMap = Read-JsonFile -Path $codexConfigPath
+    $codexTool = Get-ProviderTool -Name 'codex'
+    foreach ($profileId in @('mi', 'ds')) {
+        $session = New-EnvSession
+        $launchResult = & $codexTool.launcher $codexConfigMap.profiles[$profileId] "sk-$profileId" $profileId @() $session
+        Assert-True -Condition (@($launchResult.LaunchArgs) -contains 'model_provider=cdp') -Message 'Codex 所有 profile 应共用 model_provider=cdp，保证 /resume 跨 profile 可见'
+        Assert-True -Condition (-not (@($launchResult.LaunchArgs) -contains "model_provider=cdp_$profileId")) -Message 'Codex 不应再使用按 profile 区分的 model_provider'
+        Assert-True -Condition (@($launchResult.LaunchArgs) -contains "model_providers.cdp.env_key=CODEX_PROVIDER_TOKEN_$($profileId.ToUpperInvariant())") -Message '共用 providerId 时仍应使用当前 profile 的临时 API Key 环境变量'
     }
     Remove-Item Env:\MI_CODEX_API_KEY -ErrorAction SilentlyContinue
     Remove-Item Env:\DS_CODEX_API_KEY -ErrorAction SilentlyContinue

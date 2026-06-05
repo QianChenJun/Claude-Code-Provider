@@ -18,13 +18,13 @@
 
 ### 1. 安装
 
-**一键远程安装（推荐）** — PowerShell 里粘贴一行，自动下载源码并安装到 `~/.claude` 与 `~/.codex`：
+**一键远程安装（推荐）** — PowerShell 里粘贴一行，自动下载源码并安装到 `~/.claude` 与 `~/.codex`，并把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH：
 
 ```powershell
-iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1 | iex
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath
 ```
 
-需要传参数（如自动加 PATH + 安装后立即进入配置向导）：
+需要安装后立即进入配置向导：
 
 ```powershell
 & ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath -Configure
@@ -37,7 +37,7 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 ```
 
-安装后重新打开 PowerShell / Windows Terminal。
+`-AddPath` 会修改当前 Windows 用户的 PATH。安装后重新打开 PowerShell / Windows Terminal。
 
 想先预检会做什么、但不写入任何文件：
 
@@ -100,16 +100,17 @@ cdp
 | 查看配置列表 | `ccp list` | `cdp list` |
 | 同步快捷命令 | `ccp sync` | `cdp sync` |
 | 打开 Web 管理页面 | `ccp manager` | `cdp manager` |
+| 备份/导入配置 | `ccp profiles export/import` | `cdp profiles export/import` |
 
-每个配置也会生成快捷命令：
+每个配置也会生成兼容快捷命令：
 
 ```powershell
 ccp-mi        # 等价于 ccp mi
 cdp-ds        # 等价于 cdp ds
-mi            # 如果没有命名冲突，也会生成配置 ID 直呼命令
+mi            # 配置 ID 直呼命令
 ```
 
-推荐文档和日常交流优先使用 `ccp mi` / `cdp ds` 这种子命令形式；`ccp-mi`、`mi-claude` 等命令用于兼容和快速输入。
+推荐文档、脚本和日常交流优先使用 `ccp mi` / `cdp ds` 这种子命令形式。`ccp-mi`、`mi-claude`、`mi` 等命令用于兼容和快速输入；如果配置 ID 与系统命令或其他工具同名，直呼命令可能受 PATH 顺序影响，因此不要把常见命令名当作配置 ID。
 
 ---
 
@@ -129,7 +130,40 @@ cdp manager
 - Claude Code / Codex CLI 标签页切换
 - 基础字段校验
 
+管理页只监听 `127.0.0.1`。通过 `ccp manager` / `cdp manager` 打开时会自动携带随机本地 token；未授权请求不能读取或修改配置。
+
 需要 Node.js 18+。
+
+---
+
+## 配置备份与迁移
+
+导出当前工具配置：
+
+```powershell
+ccp profiles export -OutDir "$HOME\Desktop\provider-backup"
+cdp profiles export -OutDir "$HOME\Desktop\provider-backup"
+```
+
+一次导出两个工具：
+
+```powershell
+ccp profiles export -OutDir "$HOME\Desktop\provider-backup" -Tool all
+```
+
+导入备份：
+
+```powershell
+ccp profiles import -InDir "$HOME\Desktop\provider-backup" -Tool all
+ccp sync
+cdp sync
+```
+
+安全行为：
+
+- 导出默认会移除 `apiKey` / `token` / `key` 等明文密钥字段
+- `apiKeyEnv` 等环境变量名会保留，但环境变量值不会导出
+- 迁移到新机器后需要重新设置对应 API Key 环境变量
 
 ---
 
@@ -260,8 +294,12 @@ cdp mi
 运行自检：
 
 ```powershell
+pwsh -NoProfile -File tests\core-function-tests.ps1
 pwsh -NoProfile -File tests\setup-tests.ps1
 pwsh -NoProfile -File tests\server-path-tests.ps1
+pwsh -NoProfile -File tests\profile-transfer-tests.ps1
+pwsh -NoProfile -File tests\install-dryrun-tests.ps1
+pwsh -NoProfile -File tests\install-bootstrap-tests.ps1
 node --check src\server.mjs
 node --check src\web\app.js
 ```
@@ -305,7 +343,7 @@ node --check src\web\app.js
 
 ### 提示 `ccp` 或 `cdp` 找不到
 
-重新加入 PATH，然后重开终端：
+重新加入用户级 PATH，然后重开终端：
 
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit

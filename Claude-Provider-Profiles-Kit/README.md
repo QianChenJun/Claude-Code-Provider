@@ -20,10 +20,10 @@ node --version       # Web 管理页面需要 Node.js 18+，可选
 
 ## 推荐安装方式
 
-**最快 — 一键远程安装**（不用解压，直接粘贴）：
+**最快 — 一键远程安装**（不用解压，直接粘贴；会把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH）：
 
 ```powershell
-iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1 | iex
+& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath
 ```
 
 **本地解压后安装**（你看到这份 README 大概率是这种场景）：
@@ -33,7 +33,7 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 ```
 
-安装后重新打开 PowerShell / Windows Terminal。
+`-AddPath` 会修改当前 Windows 用户的 PATH。安装后重新打开 PowerShell / Windows Terminal。
 
 预检（不写入任何文件）：
 
@@ -109,6 +109,7 @@ cdp manager
 ```
 
 需要 Node.js 18+。Web 页面可新增、复制、删除供应商配置，并一键保存同步快捷命令。
+管理页只监听 `127.0.0.1`。通过 `ccp manager` / `cdp manager` 打开时会自动携带随机本地 token；未授权请求不能读取或修改配置。
 
 ---
 
@@ -121,8 +122,22 @@ cdp manager
 | 查看列表 | `ccp list` | `cdp list` |
 | 同步命令 | `ccp sync` | `cdp sync` |
 | Web 管理 | `ccp manager` | `cdp manager` |
+| 备份/导入 | `ccp profiles export/import` | `cdp profiles export/import` |
 
-安装脚本也会生成 `ccp-mi`、`cdp-ds`、`mi-claude` 等兼容快捷命令，但文档推荐优先使用 `ccp mi` / `cdp ds`。
+安装脚本也会生成 `ccp-mi`、`cdp-ds`、`mi-claude`、`mi` 等兼容快捷命令，但文档、脚本和日常交流推荐优先使用 `ccp mi` / `cdp ds`。如果配置 ID 与系统命令或其他工具同名，直呼命令可能受 PATH 顺序影响，因此不要把常见命令名当作配置 ID。
+
+---
+
+## 配置备份与迁移
+
+```powershell
+ccp profiles export -OutDir "$HOME\Desktop\provider-backup" -Tool all
+ccp profiles import -InDir "$HOME\Desktop\provider-backup" -Tool all
+ccp sync
+cdp sync
+```
+
+导出默认会移除 `apiKey` / `token` / `key` 等明文密钥字段；环境变量名会保留，但 API Key 值不会导出。迁移到新机器后需要重新设置对应环境变量。
 
 ---
 
@@ -146,7 +161,7 @@ cdp sync
 
 ### `ccp` / `cdp` 命令找不到
 
-重新执行：
+重新写入用户级 PATH：
 
 ```powershell
 .\install.ps1 -AddPath

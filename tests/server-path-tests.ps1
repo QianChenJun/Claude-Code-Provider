@@ -90,9 +90,10 @@ try {
     }
 
     $port = Get-FreeTcpPort
+    $authToken = "test-token-$([guid]::NewGuid().ToString('N'))"
     $serverPath = Join-Path $repoRoot 'src\server.mjs'
     $serverProcess = Start-Process -FilePath 'node' `
-        -ArgumentList @($serverPath, '--port', $port, '--tool', 'claude') `
+        -ArgumentList @($serverPath, '--port', $port, '--tool', 'claude', '--auth-token', $authToken) `
         -WorkingDirectory $repoRoot `
         -WindowStyle Hidden `
         -PassThru
@@ -107,13 +108,35 @@ try {
         catch {}
     }
     Assert-True -Condition ($null -ne $health -and $health.ok) -Message 'server.mjs 应能启动并返回健康检查'
+    Assert-True -Condition (-not (Test-JsonProperty -Object $health -Name 'root')) -Message '未授权健康检查不应暴露服务根目录'
+    Assert-True -Condition (-not (Test-JsonProperty -Object $health -Name 'tools')) -Message '未授权健康检查不应暴露工具清单'
 
-    $tools = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/tools" -Method Get -TimeoutSec 5
+    $unauthorizedBlocked = $false
+    try {
+        Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/tools" -Method Get -TimeoutSec 5 | Out-Null
+    }
+    catch {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+        if ($statusCode -eq 401) { $unauthorizedBlocked = $true }
+    }
+    Assert-True -Condition $unauthorizedBlocked -Message '未授权请求不应访问 Web 管理 API'
+
+    $webSession = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
+    Invoke-WebRequest -Uri "http://127.0.0.1:$port/auth?token=$authToken&tool=claude" `
+        -Method Get `
+        -WebSession $webSession `
+        -TimeoutSec 5 | Out-Null
+
+    $authorizedHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -Method Get -WebSession $webSession -TimeoutSec 5
+    Assert-True -Condition (Test-JsonProperty -Object $authorizedHealth -Name 'root') -Message '授权健康检查应返回服务根目录，供 manager 复用校验'
+    Assert-True -Condition (Test-JsonProperty -Object $authorizedHealth -Name 'tools') -Message '授权健康检查应返回工具清单，供 manager 复用校验'
+
+    $tools = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/tools" -Method Get -WebSession $webSession -TimeoutSec 5
     Assert-Equal -Actual $tools.claude.configPath -Expected $claudeConfigPath -Message 'Claude 标签页应指向 Claude 配置文件'
     Assert-Equal -Actual $tools.codex.configPath -Expected $codexConfigPath -Message 'Codex 标签页应指向 Codex 配置文件'
 
-    $claudeConfig = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/claude/config" -Method Get -TimeoutSec 5
-    $codexConfig = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/codex/config" -Method Get -TimeoutSec 5
+    $claudeConfig = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/claude/config" -Method Get -WebSession $webSession -TimeoutSec 5
+    $codexConfig = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/codex/config" -Method Get -WebSession $webSession -TimeoutSec 5
 
     Assert-True -Condition (Test-JsonProperty -Object $claudeConfig.profiles -Name 'claude_only') -Message 'Claude API 应读取 Claude 配置'
     Assert-True -Condition (-not (Test-JsonProperty -Object $claudeConfig.profiles -Name 'codex_only')) -Message 'Claude API 不应读取 Codex 配置'
@@ -134,6 +157,7 @@ try {
     $putResult = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/codex/config" `
         -Method Put `
         -ContentType 'application/json' `
+        -WebSession $webSession `
         -Body ($newCodexConfig | ConvertTo-Json -Depth 20) `
         -TimeoutSec 60
 

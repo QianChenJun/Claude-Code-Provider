@@ -1,7 +1,7 @@
 # AI CLI Switcher — 可优化项清单
 
 > 基于 2026-05-22 代码库多维度审查，按优先级排列。
-> **进度：14/19 已完成** | 最后更新：2026-05-24
+> **进度：18/19 已完成** | 最后更新：2026-06-05
 
 ## P0 — 修复（影响功能正确性）
 
@@ -27,10 +27,10 @@
 **位置**：4 个示例配置模板
 **已完成**：移除模板中的 shortcut 字段（commit e23a031）。用户部署配置未自动修改。
 
-### 5. `Select-ProfileFromMenu` 菜单中 profile 遍历顺序不稳定
-**位置**：`ProviderCore.psm1:252`
+### 5. ✅ `Select-ProfileFromMenu` 菜单中 profile 遍历顺序不稳定
+**位置**：`ProviderCore.psm1:571-604`
 **问题**：hashtable 枚举顺序不可靠，JSON key 原始顺序已丢失。
-**状态**：未处理。影响较小（已有 Sort-Object），可在后续迭代中改用 `[ordered]`。
+**已完成**：新增统一的 profile 排序 helper，菜单和列表均按配置 ID 的 OrdinalIgnoreCase 顺序稳定展示，并增加回归测试。
 
 ---
 
@@ -40,10 +40,10 @@
 **位置**：`providers.json` + `Resolve-ApiKey`
 **已完成**：Resolve-ApiKey 追踪密钥来源，明文 apiKey 字段触发 Write-Warning 引导迁移到 apiKeyEnv（commit 1ca42d4）。
 
-### 7. Web UI 无认证/授权保护
+### 7. ✅ Web UI 无认证/授权保护
 **位置**：`src/web/app.js` + `Manage-*UI.ps1`
 **问题**：管理界面监听 localhost，任何本地进程可访问。
-**状态**：未处理。localhost-only 风险可控，需评估是否需要增加 token/确认机制。
+**已完成**：`Manage-ProviderUI.ps1` 为每个本地服务生成随机 token，`server.mjs` 通过 `/auth` 设置 HttpOnly/SameSite cookie，并对管理 API 与静态页面启用鉴权；未授权请求仅允许访问健康检查。
 
 ---
 
@@ -61,10 +61,10 @@
 **位置**：`ProviderCore.psm1:155-191`
 **已完成**：报错信息说明已检查的三种来源及其值（commit e23a031）；额外增加明文 apiKey 警告（commit 1ca42d4）。
 
-### 11. `Invoke-ProviderSession` 启动失败时临时文件残留
-**位置**：`ProviderCore.psm1:421-472`
+### 11. ✅ `Invoke-ProviderSession` 启动失败时临时文件残留
+**位置**：`ProviderCore.psm1:767-835`
 **问题**：launcher 内部抛出异常时临时文件路径未通过 TempFile 返回，无法在 finally 中清理。
-**状态**：未处理。临时文件在 %TEMP% 下，OS 会定期清理。风险较低。
+**已完成**：EnvSession 增加临时文件登记，launcher 返回前抛错和 CLI 启动失败都会在 finally 中清理临时文件并恢复环境变量。
 
 ### 12. ✅ 错误信息中英文混用
 **位置**：全局
@@ -79,12 +79,12 @@
 ## P4 — 未来考虑
 
 ### 14. ProviderCore.psm1 模块过大
-**位置**：`src/core/ProviderCore.psm1`（~926 行）
+**位置**：`src/core/ProviderCore.psm1`（约 1277 行）
 **建议**：拆分为 `Core.Json.psm1`、`Core.Session.psm1`、`Core.Shortcut.psm1` 等子模块。等模块超过 1500 行时考虑。
 
-### 15. 缺少自动化测试
+### 15. ✅ 缺少自动化测试
 **问题**：无单元测试/集成测试。
-**建议**：使用 Pester 框架为核心函数（Read-JsonFile、Convert-JsonObjectToHashtable、Resolve-ApiKey、Sync-ToolShortcuts）添加测试。
+**已完成**：已有脚本式集成测试覆盖 setup、server、install、profiles transfer；新增 `tests/core-function-tests.ps1` 直接覆盖 `Read-JsonFile`、`Convert-JsonObjectToHashtable`、`Resolve-ApiKey` 的关键边界。
 
 ### 16. 快捷命令 bin 目录污染 PATH 的风险
 **位置**：`Sync-ToolShortcuts` 生成的 `bin/` 目录

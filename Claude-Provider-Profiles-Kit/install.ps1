@@ -109,6 +109,7 @@ function Deploy-SharedFiles {
         @{ Source = 'tools\Invoke-Provider.ps1';   Destination = 'src\tools\Invoke-Provider.ps1' },
         @{ Source = 'tools\Sync-Shortcuts.ps1';    Destination = 'src\tools\Sync-Shortcuts.ps1' },
         @{ Source = 'tools\Manage-ProviderUI.ps1'; Destination = 'src\tools\Manage-ProviderUI.ps1' },
+        @{ Source = 'tools\Manage-ProviderProfiles.ps1'; Destination = 'src\tools\Manage-ProviderProfiles.ps1' },
         @{ Source = 'server.mjs';                  Destination = 'server.mjs' },
         @{ Source = 'web\index.html';              Destination = 'web\index.html' },
         @{ Source = 'web\app.js';                  Destination = 'web\app.js' },
@@ -301,17 +302,18 @@ Write-Output ""
 Write-Output "Claude Code (ccp):"
 Write-Output "  配置文件：$claudeConfigPath"
 Write-Output "  快捷命令：$claudeBin"
-Write-Output "  使用：ccp / ccp setup / ccp mi / ccp list / ccp manager"
+Write-Output "  使用：ccp / ccp setup / ccp mi / ccp list / ccp manager / ccp profiles"
 Write-Output ""
 Write-Output "Codex CLI (cdp):"
 Write-Output "  配置文件：$codexConfigPath"
 Write-Output "  快捷命令：$codexBin"
-Write-Output "  使用：cdp / cdp setup / cdp ds / cdp list / cdp manager"
+Write-Output "  使用：cdp / cdp setup / cdp ds / cdp list / cdp manager / cdp profiles"
 Write-Output ""
 
 if (-not $AddPath) {
-    Write-Warning "如需自动加入 PATH，请重新执行：.\install.ps1 -AddPath"
+    Write-Warning "如需自动加入用户级 PATH，请重新执行：.\install.ps1 -AddPath"
 } else {
+    Write-Output "已修改用户级 PATH，仅新增 .claude\bin / .codex\bin；推荐优先使用 ccp <profile> / cdp <profile> 子命令。"
     Write-Output "请重新打开 PowerShell / Windows Terminal 后使用快捷命令。"
 }
 

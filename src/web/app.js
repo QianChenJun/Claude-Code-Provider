@@ -66,10 +66,10 @@ function restoreToolState(tool) {
   return true;
 }
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
-const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
+const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure', 'profiles']);
 const reservedCommandNames = new Set([
-  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
-  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager'
+  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager', 'ccp-profiles',
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager', 'cdp-profiles'
 ]);
 
 function setStatus(msg, isError = false) {
@@ -264,10 +264,28 @@ function renderConfig(config) {
   }
 }
 
+function apiFetch(url, options = {}) {
+  return fetch(url, { credentials: 'same-origin', ...options });
+}
+
+async function readJsonResponse(res) {
+  const text = await res.text();
+  let payload = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      if (!res.ok) throw new Error(text);
+      throw new Error('接口返回了非 JSON 数据');
+    }
+  }
+  if (!res.ok) throw new Error(payload.error || text || '请求失败');
+  return payload;
+}
+
 async function loadConfig() {
-  const res = await fetch(`/api/${currentTool}/config`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(await res.text());
-  renderConfig(await res.json());
+  const res = await apiFetch(`/api/${currentTool}/config`, { cache: 'no-store' });
+  renderConfig(await readJsonResponse(res));
   markClean();
   setStatus(`已加载 ${TOOL_META[currentTool].displayName} 配置`);
 }
@@ -312,13 +330,12 @@ function collectConfig() {
 
 async function saveConfig(message) {
   const config = collectConfig();
-  const res = await fetch(`/api/${currentTool}/config`, {
+  const res = await apiFetch(`/api/${currentTool}/config`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(config)
   });
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || '保存失败');
+  const payload = await readJsonResponse(res);
   renderConfig(payload);
   const ts = new Date().toLocaleTimeString();
   // 后端保存成功时已自动同步快捷命令，syncOutput 为同步脚本输出（含 "同步失败：" 前缀代表失败）
@@ -329,9 +346,8 @@ async function saveConfig(message) {
 }
 
 async function syncShortcuts() {
-  const res = await fetch(`/api/${currentTool}/sync`, { method: 'POST' });
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || '同步失败');
+  const res = await apiFetch(`/api/${currentTool}/sync`, { method: 'POST' });
+  const payload = await readJsonResponse(res);
   return payload.output || '';
 }
 

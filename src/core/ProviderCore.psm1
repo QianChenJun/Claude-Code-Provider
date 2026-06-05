@@ -51,15 +51,14 @@ function Convert-JsonObjectToHashtable {
 
     if ($Value -is [System.Collections.IEnumerable] -and
         $Value -isnot [string] -and $Value -isnot [byte[]]) {
-        $items = @()
+        $items = [System.Collections.Generic.List[object]]::new()
         foreach ($item in $Value) {
-            $items += Convert-JsonObjectToHashtable -Value $item
+            [void]$items.Add((Convert-JsonObjectToHashtable -Value $item))
         }
-        return $items
+        return ,$items.ToArray()
     }
 
-    if ($Value.GetType().Name -eq 'PSCustomObject' -and
-        @($Value.PSObject.Properties).Count -gt 0) {
+    if ($Value.GetType().Name -eq 'PSCustomObject') {
         $map = [ordered]@{}
         foreach ($prop in $Value.PSObject.Properties) {
             $map[$prop.Name] = Convert-JsonObjectToHashtable -Value $prop.Value
@@ -214,7 +213,7 @@ function Assert-ProviderProfileInput {
         throw "配置 ID 不合法：$ProfileId。请使用 1-40 位英文字母、数字、下划线或短横线，并以字母或数字开头。"
     }
 
-    $reservedProfileIds = @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure')
+    $reservedProfileIds = @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure', 'profiles')
     if ($ProfileId -in $reservedProfileIds) {
         throw "配置 ID 与内置命令冲突：$ProfileId"
     }
@@ -223,7 +222,7 @@ function Assert-ProviderProfileInput {
         $prefix = $Tool.commandPrefix
         $suffix = $Tool.defaultShortcutSuffix
         $reservedCmdNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-        foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager")) {
+        foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "$prefix-profiles")) {
             [void]$reservedCmdNames.Add($name)
         }
 
@@ -482,16 +481,52 @@ function Invoke-ProviderSetup {
 #  Display Helpers
 # ============================================================
 
+function Compare-ProfileId {
+    param(
+        [Parameter(Mandatory)][string]$Left,
+        [Parameter(Mandatory)][string]$Right
+    )
+
+    $result = [System.StringComparer]::OrdinalIgnoreCase.Compare($Left, $Right)
+    if ($result -eq 0) {
+        $result = [System.StringComparer]::Ordinal.Compare($Left, $Right)
+    }
+    return $result
+}
+
+function Get-SortedProfileEntries {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Profiles)
+
+    $ids = @($Profiles.Keys | ForEach-Object { "$_" })
+    for ($i = 1; $i -lt $ids.Count; $i++) {
+        $current = $ids[$i]
+        $j = $i - 1
+        while ($j -ge 0 -and (Compare-ProfileId -Left $ids[$j] -Right $current) -gt 0) {
+            $ids[$j + 1] = $ids[$j]
+            $j--
+        }
+        $ids[$j + 1] = $current
+    }
+
+    foreach ($id in $ids) {
+        [PSCustomObject]@{
+            Name  = $id
+            Value = $Profiles[$id]
+        }
+    }
+}
+
 function Write-ProfileTable {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][hashtable]$Profiles,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Profiles,
         [Parameter(Mandatory)][hashtable]$Tool
     )
 
     $prefix = $Tool.commandPrefix
 
-    $Profiles.GetEnumerator() | Sort-Object Name | ForEach-Object {
+    Get-SortedProfileEntries -Profiles $Profiles | ForEach-Object {
         $item = $_.Value
         [PSCustomObject]@{
             '配置ID'   = $_.Name
@@ -508,7 +543,7 @@ function Write-ProfileTable {
 function Write-Usage {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][hashtable]$Profiles,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Profiles,
         [Parameter(Mandatory)][hashtable]$Tool
     )
 
@@ -518,6 +553,7 @@ function Write-Usage {
     Write-Output "  $prefix                         # 打开交互菜单"
     Write-Output "  $prefix <profile> [$($Tool.name) args]"
     Write-Output "  $prefix setup [profile]         # 新增或更新配置"
+    Write-Output "  $prefix profiles <action>       # 备份/导入/查看配置"
     Write-Output "  $prefix-list"
     Write-Output "  $prefix-<profile> [$($Tool.name) args]"
     Write-Output "  $prefix-setup [profile]"
@@ -535,7 +571,7 @@ function Write-Usage {
 function Select-ProfileFromMenu {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][hashtable]$Profiles,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Profiles,
         [Parameter(Mandatory)][hashtable]$Tool,
         [string]$SyncScript,
         [string]$ManageScript
@@ -544,7 +580,7 @@ function Select-ProfileFromMenu {
     $prefix = $Tool.commandPrefix
 
     while ($true) {
-        $entries = @($Profiles.GetEnumerator() | Sort-Object Name)
+        $entries = @(Get-SortedProfileEntries -Profiles $Profiles)
         Write-Host ""
         Write-Host "$($Tool.displayName) Provider 配置"
         Write-Host "请选择配置："
@@ -653,6 +689,8 @@ function New-EnvSession {
         ManagedKeys  = [System.Collections.Generic.HashSet[string]]::new(
                            [StringComparer]::OrdinalIgnoreCase)
         OriginalEnvs = @{}
+        TempFiles    = [System.Collections.Generic.HashSet[string]]::new(
+                           [StringComparer]::OrdinalIgnoreCase)
     }
 
     foreach ($key in $ManagedKeys) {
@@ -675,8 +713,22 @@ function Add-EnvSessionKey {
     )
 
     [void]$Session.ManagedKeys.Add($Key)
-    $current = Get-Item -LiteralPath "Env:\$Key" -ErrorAction SilentlyContinue
-    $Session.OriginalEnvs[$Key] = $(if ($current) { $current.Value } else { $null })
+    if (-not $Session.OriginalEnvs.Contains($Key)) {
+        $current = Get-Item -LiteralPath "Env:\$Key" -ErrorAction SilentlyContinue
+        $Session.OriginalEnvs[$Key] = $(if ($current) { $current.Value } else { $null })
+    }
+}
+
+function Add-EnvSessionTempFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Session,
+        [Parameter(Mandatory)][string]$Path
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Path)) {
+        [void]$Session.TempFiles.Add($Path)
+    }
 }
 
 function Set-EnvSessionValue {
@@ -744,6 +796,7 @@ function Invoke-ProviderSession {
 
     $session = New-EnvSession -ManagedKeys $managedKeys
 
+    $launchResult = $null
     try {
         $launchResult = & $tool.launcher $profile $apiKey $ProfileId $RemainingArgs $session
 
@@ -760,8 +813,24 @@ function Invoke-ProviderSession {
         exit $LASTEXITCODE
     }
     finally {
-        if ($launchResult -and $launchResult.TempFile) {
-            Remove-Item -LiteralPath $launchResult.TempFile -ErrorAction SilentlyContinue
+        $tempFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($path in $session.TempFiles) {
+            [void]$tempFiles.Add($path)
+        }
+        if ($launchResult) {
+            $returnedTempFile = $null
+            if ($launchResult -is [System.Collections.IDictionary]) {
+                if ($launchResult.Contains('TempFile')) { $returnedTempFile = $launchResult['TempFile'] }
+            }
+            elseif ($launchResult.PSObject.Properties['TempFile']) {
+                $returnedTempFile = $launchResult.TempFile
+            }
+            if ($returnedTempFile) {
+                [void]$tempFiles.Add($returnedTempFile)
+            }
+        }
+        foreach ($tempFile in $tempFiles) {
+            Remove-Item -LiteralPath $tempFile -ErrorAction SilentlyContinue
         }
         Restore-EnvSession -Session $session
     }
@@ -790,10 +859,10 @@ function Sync-ToolShortcuts {
     $reservedProfileIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $reservedCmdNames   = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
-    foreach ($name in @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure')) {
+    foreach ($name in @('list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure', 'profiles')) {
         [void]$reservedProfileIds.Add($name)
     }
-    foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager")) {
+    foreach ($name in @($prefix, "$prefix-list", "$prefix-setup", "$prefix-sync", "$prefix-manager", "$prefix-profiles")) {
         [void]$reservedCmdNames.Add($name)
         [void]$usedShortcutNames.Add($name.ToLowerInvariant())
     }
@@ -996,6 +1065,7 @@ if (-not $script:ToolRegistry.Contains('claude')) {
         invokeScript         = (Join-Path $claudeRoot 'src\tools\claude\Invoke-ClaudeProvider.ps1')
         syncScript           = (Join-Path $claudeRoot 'src\tools\claude\Sync-ClaudeShortcuts.ps1')
         manageScript         = (Join-Path $claudeRoot 'src\tools\claude\Manage-ClaudeUI.ps1')
+        profilesScript       = (Join-Path $claudeRoot 'src\tools\Manage-ProviderProfiles.ps1')
         launcher             = {
             param($Profile, $ApiKey, $ProfileId, $RemainingArgs, $Session)
 
@@ -1049,6 +1119,7 @@ if (-not $script:ToolRegistry.Contains('claude')) {
             }
 
             $tempPath = Join-Path ([System.IO.Path]::GetTempPath()) "claude-profile-$ProfileId-$PID.settings.json"
+            Add-EnvSessionTempFile -Session $Session -Path $tempPath
             Write-Utf8NoBomJson -Path $tempPath -Value @{ env = $settings.env }
 
             $launchArgs = @('--setting-sources', 'project,user,local', '--settings', $tempPath)
@@ -1083,6 +1154,7 @@ if (-not $script:ToolRegistry.Contains('codex')) {
         invokeScript         = (Join-Path $codexRoot 'src\tools\codex\Invoke-CodexProvider.ps1')
         syncScript           = (Join-Path $codexRoot 'src\tools\codex\Sync-CodexShortcuts.ps1')
         manageScript         = (Join-Path $codexRoot 'src\tools\codex\Manage-CodexUI.ps1')
+        profilesScript       = (Join-Path $codexRoot 'src\tools\Manage-ProviderProfiles.ps1')
         launcher             = {
             param($Profile, $ApiKey, $ProfileId, $RemainingArgs, $Session)
 
@@ -1092,16 +1164,10 @@ if (-not $script:ToolRegistry.Contains('codex')) {
                 throw "当前仅支持 Codex 官方文档支持的 responses provider：$ProfileId"
             }
 
-            # 检测是否为 resume 模式：resume 时使用固定 providerId，使所有 profile 的会话互相可见
-            $isResume = $RemainingArgs -contains 'resume'
-            if ($isResume) {
-                $providerId = 'cdp_resume'
-                $tempKeyEnv = 'CODEX_PROVIDER_TOKEN_RESUME'
-            } else {
-                $safeProfile = (($ProfileId -replace '[^A-Za-z0-9_]', '_').Trim('_'))
-                $providerId  = "cdp_$safeProfile"
-                $tempKeyEnv  = "CODEX_PROVIDER_TOKEN_$($safeProfile.ToUpperInvariant())"
-            }
+            # Codex 的 /resume 会按 model_provider 过滤；所有 cdp profile 必须共用同一个 providerId。
+            $safeProfile = (($ProfileId -replace '[^A-Za-z0-9_]', '_').Trim('_'))
+            $providerId  = 'cdp'
+            $tempKeyEnv  = "CODEX_PROVIDER_TOKEN_$($safeProfile.ToUpperInvariant())"
 
             Add-EnvSessionKey -Session $Session -Key $tempKeyEnv
 
@@ -1202,6 +1268,7 @@ Export-ModuleMember -Function @(
     'Get-ProviderTools',
     'New-EnvSession',
     'Add-EnvSessionKey',
+    'Add-EnvSessionTempFile',
     'Set-EnvSessionValue',
     'Restore-EnvSession',
     'Invoke-ProviderSession',

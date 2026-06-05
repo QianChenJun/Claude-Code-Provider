@@ -140,17 +140,15 @@ switch ($Action) {
     }
 
     'web' {
-        $serverPath = Join-Path $repoRoot 'src\server.mjs'
-        if (-not (Test-Path -LiteralPath $serverPath)) {
-            throw "找不到 server.mjs：$serverPath"
-        }
         if (-not (Test-CommandExists 'node')) {
             throw "未找到 node。Web 管理台需要 Node.js 18+。"
         }
 
         Write-Header "启动 Web 管理台"
-        Start-Process "http://127.0.0.1:15722/" | Out-Null
-        node $serverPath --port 15722
+        $ToolName = 'claude'
+        $Port = 0
+        $Foreground = $false
+        . (Join-Path $repoRoot 'src\tools\Manage-ProviderUI.ps1')
     }
 
     'help' {
@@ -165,8 +163,8 @@ switch ($Action) {
         Write-Output "  help    显示此帮助"
         Write-Output ""
         Write-Output "快捷命令（同步后可用）："
-        Write-Output "  ccp / ccp setup / ccp mi / ccp list / ccp manager"
-        Write-Output "  cdp / cdp setup / cdp ds / cdp list / cdp manager"
+        Write-Output "  ccp / ccp setup / ccp mi / ccp list / ccp manager / ccp profiles"
+        Write-Output "  cdp / cdp setup / cdp ds / cdp list / cdp manager / cdp profiles"
         Write-Output ""
         Write-Output "详细文档：README.md"
     }

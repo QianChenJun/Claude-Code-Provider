@@ -46,6 +46,10 @@ try {
         -Condition (($overwriteOutput -join "`n") -match 'DRY-RUN 将覆盖 Claude 配置') `
         -Message 'DryRun 搭配 OverwriteConfig 时应只预告覆盖配置'
 
+    Assert-True `
+        -Condition (($output -join "`n") -match 'Manage-ProviderProfiles\.ps1') `
+        -Message 'DryRun 应预告部署导入导出工具'
+
     Write-Output 'install-dryrun-tests: PASS'
 }
 finally {

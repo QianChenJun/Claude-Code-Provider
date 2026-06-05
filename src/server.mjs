@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
@@ -18,6 +19,8 @@ const port = Number(getArgValue('--port') || 15722);
 const requestedTool = getArgValue('--tool');
 const activeTool = ['claude', 'codex'].includes(requestedTool) ? requestedTool : 'claude';
 const userHome = process.env.USERPROFILE || process.env.HOME;
+const authToken = getArgValue('--auth-token') || randomBytes(32).toString('base64url');
+const authCookieName = 'provider_profiles_auth';
 
 if (!userHome) {
   throw new Error('无法定位用户目录：USERPROFILE/HOME 未设置');
@@ -76,10 +79,10 @@ const TOOLS = {
 };
 
 const profileIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$/;
-const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure']);
+const reservedProfileIds = new Set(['list', 'ls', 'help', 'usage', 'sync', 'manager', 'manage', 'setup', 'add', 'configure', 'profiles']);
 const reservedCommandNames = new Set([
-  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager',
-  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager'
+  'ccp', 'ccp-list', 'ccp-setup', 'ccp-sync', 'ccp-manager', 'ccp-profiles',
+  'cdp', 'cdp-list', 'cdp-setup', 'cdp-sync', 'cdp-manager', 'cdp-profiles'
 ]);
 
 function sendJson(res, status, data) {
@@ -93,6 +96,44 @@ function sendJson(res, status, data) {
 function sendText(res, status, text) {
   res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' });
   res.end(text);
+}
+
+function parseCookies(req) {
+  const result = new Map();
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const index = part.indexOf('=');
+    if (index <= 0) continue;
+    result.set(part.slice(0, index).trim(), part.slice(index + 1).trim());
+  }
+  return result;
+}
+
+function isTokenMatch(candidate) {
+  if (!candidate || typeof candidate !== 'string') return false;
+  const expected = Buffer.from(authToken, 'utf8');
+  const actual = Buffer.from(candidate, 'utf8');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+function isAuthorized(req) {
+  const headerToken = req.headers['x-provider-profiles-token'];
+  if (isTokenMatch(Array.isArray(headerToken) ? headerToken[0] : headerToken)) return true;
+  return isTokenMatch(parseCookies(req).get(authCookieName));
+}
+
+function sendUnauthorized(res) {
+  sendText(res, 401, '未授权：请通过 ccp manager / cdp manager 打开管理页面');
+}
+
+function sendAuthRedirect(res, toolName) {
+  const safeTool = ['claude', 'codex'].includes(toolName) ? toolName : activeTool;
+  res.writeHead(302, {
+    'set-cookie': `${authCookieName}=${authToken}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`,
+    'location': `/?tool=${encodeURIComponent(safeTool)}`,
+    'cache-control': 'no-store'
+  });
+  res.end();
 }
 
 async function readBody(req) {
@@ -237,7 +278,28 @@ const server = http.createServer(async (req, res) => {
 
     // Health check
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(res, 200, { ok: true, root, activeTool, tools: Object.keys(TOOLS) });
+      const payload = { ok: true, auth: 'token' };
+      if (isAuthorized(req)) {
+        payload.root = root;
+        payload.activeTool = activeTool;
+        payload.tools = Object.keys(TOOLS);
+      }
+      sendJson(res, 200, payload);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/auth') {
+      const token = url.searchParams.get('token');
+      if (!isTokenMatch(token)) {
+        sendText(res, 403, '授权 token 无效');
+        return;
+      }
+      sendAuthRedirect(res, url.searchParams.get('tool'));
+      return;
+    }
+
+    if (!isAuthorized(req)) {
+      sendUnauthorized(res);
       return;
     }
 
@@ -328,7 +390,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`Provider Profiles 管理台： http://127.0.0.1:${port}/`);
+  console.log(`Provider Profiles 管理台： http://127.0.0.1:${port}/auth?token=${encodeURIComponent(authToken)}&tool=${encodeURIComponent(activeTool)}`);
+  console.log('本地 API 已启用 token/cookie 访问保护');
   console.log(`已注册工具：${Object.keys(TOOLS).join(', ')}`);
   for (const [name, tool] of Object.entries(TOOLS)) {
     console.log(`${name} 配置文件：${tool.configPath}`);
