@@ -8,7 +8,73 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("provider-install-dryrun-tests-" + [guid]::NewGuid().ToString('N'))
 $originalUserProfile = $env:USERPROFILE
-$originalUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+
+function Get-UserPathSnapshot {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    if (-not $key) {
+        return [pscustomobject]@{
+            Exists = $false
+            Value  = $null
+            Kind   = $null
+        }
+    }
+
+    try {
+        $exists = $key.GetValueNames() -contains 'Path'
+        return [pscustomobject]@{
+            Exists = $exists
+            Value  = if ($exists) {
+                # CI 的用户 PATH 可能是 ExpandString，读取原始值可避免 USERPROFILE 变化造成误判。
+                $key.GetValue(
+                    'Path',
+                    $null,
+                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+                )
+            } else {
+                $null
+            }
+            Kind   = if ($exists) { $key.GetValueKind('Path') } else { $null }
+        }
+    }
+    finally {
+        $key.Dispose()
+    }
+}
+
+function Test-UserPathSnapshotEqual {
+    param(
+        [Parameter(Mandatory)]$Expected,
+        [Parameter(Mandatory)]$Actual
+    )
+
+    if ($Expected.Exists -ne $Actual.Exists) { return $false }
+    if (-not $Expected.Exists) { return $true }
+
+    return $Expected.Kind -eq $Actual.Kind -and
+        [string]::Equals(
+            [string]$Expected.Value,
+            [string]$Actual.Value,
+            [System.StringComparison]::Ordinal
+        )
+}
+
+function Restore-UserPathSnapshot {
+    param([Parameter(Mandatory)]$Snapshot)
+
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+        if ($Snapshot.Exists) {
+            $key.SetValue('Path', $Snapshot.Value, $Snapshot.Kind)
+        } else {
+            $key.DeleteValue('Path', $false)
+        }
+    }
+    finally {
+        $key.Dispose()
+    }
+}
+
+$originalUserPath = Get-UserPathSnapshot
 
 function Assert-True {
     param(
@@ -35,7 +101,7 @@ try {
         -Message 'DryRun 不应写入 .codex 目录'
 
     Assert-True `
-        -Condition ([Environment]::GetEnvironmentVariable('Path', 'User') -eq $originalUserPath) `
+        -Condition (Test-UserPathSnapshotEqual -Expected $originalUserPath -Actual (Get-UserPathSnapshot)) `
         -Message 'DryRun 不应修改用户 PATH'
 
     Assert-True `
@@ -54,6 +120,9 @@ try {
 }
 finally {
     $env:USERPROFILE = $originalUserProfile
-    [Environment]::SetEnvironmentVariable('Path', $originalUserPath, 'User')
+    $currentUserPath = Get-UserPathSnapshot
+    if (-not (Test-UserPathSnapshotEqual -Expected $originalUserPath -Actual $currentUserPath)) {
+        Restore-UserPathSnapshot -Snapshot $originalUserPath
+    }
     Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
 }
