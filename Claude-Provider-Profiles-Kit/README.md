@@ -2,7 +2,7 @@
 
 这是给普通用户使用的安装包。它会安装 `ccp`（Claude Code）和 `cdp`（Codex CLI）两套供应商切换命令。
 
-> Windows only · PowerShell 5.1+ / PowerShell 7+ · 不包含真实 API Key
+> Windows only · PowerShell 7+ · 不包含真实 API Key
 
 ---
 
@@ -20,13 +20,15 @@ node --version       # Web 管理页面需要 Node.js 18+，可选
 
 ## 推荐安装方式
 
-**最快 — 一键远程安装**（不用解压，直接粘贴；会把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH）：
+**最快 — 一键远程安装**（在 PowerShell 7 中直接粘贴；会把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH）：
 
 ```powershell
 & ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath
 ```
 
-**本地解压后安装**（你看到这份 README 大概率是这种场景）：
+> 远程安装会执行 `main` 分支中的脚本。企业或安全敏感环境建议从 GitHub Releases 下载固定版本，检查 `install.ps1` 后再运行。
+
+**本地解压后安装（推荐用于企业或安全敏感环境）**：
 
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit

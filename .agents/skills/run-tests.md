@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: 运行 Claude-Provider-Profiles 测试套件,包括 PowerShell 和 JavaScript 语法检查
+description: 运行 AI CLI Switcher 测试套件,包括 PowerShell 和 JavaScript 语法检查
 trigger: 用户说"运行测试"、"跑测试"、"test"、"验证修改"
 ---
 

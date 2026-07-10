@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lint:
@@ -35,10 +35,48 @@ jobs:
             throw "PSScriptAnalyzer found $($results.Count) issue(s)."
           }
 
+  test:
+    name: Tests before release
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run PowerShell tests
+        shell: pwsh
+        run: |
+          $tests = @(
+            'tests/core-function-tests.ps1'
+            'tests/setup-tests.ps1'
+            'tests/install-dryrun-tests.ps1'
+            'tests/install-bootstrap-tests.ps1'
+            'tests/profile-transfer-tests.ps1'
+            'tests/server-path-tests.ps1'
+          )
+          foreach ($test in $tests) {
+            Write-Output "Running $test"
+            & pwsh -NoProfile -File $test
+            if ($LASTEXITCODE -ne 0) {
+              throw "$test failed with exit code $LASTEXITCODE"
+            }
+          }
+
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check src/server.mjs
+          node --check src/web/app.js
+
   release:
     name: Package and Release
-    needs: lint
+    needs: [lint, test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:

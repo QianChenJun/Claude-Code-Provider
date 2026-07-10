@@ -7,10 +7,54 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  test:
+    name: Tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run PowerShell tests
+        shell: pwsh
+        run: |
+          $tests = @(
+            'tests/core-function-tests.ps1'
+            'tests/setup-tests.ps1'
+            'tests/install-dryrun-tests.ps1'
+            'tests/install-bootstrap-tests.ps1'
+            'tests/profile-transfer-tests.ps1'
+            'tests/server-path-tests.ps1'
+          )
+          foreach ($test in $tests) {
+            Write-Output "Running $test"
+            & pwsh -NoProfile -File $test
+            if ($LASTEXITCODE -ne 0) {
+              throw "$test failed with exit code $LASTEXITCODE"
+            }
+          }
+
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check src/server.mjs
+          node --check src/web/app.js
+
   lint-powershell:
     name: PSScriptAnalyzer
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -38,27 +82,3 @@ jobs:
             throw "PSScriptAnalyzer found $($results.Count) issue(s)."
           }
           Write-Output 'PSScriptAnalyzer: no issues.'
-
-  lint-javascript:
-    name: JavaScript Syntax
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Check .mjs / .js syntax
-        run: |
-          shopt -s globstar nullglob
-          files=( **/*.mjs **/*.js )
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No JS/MJS files found, skipping."
-            exit 0
-          fi
-          for f in "${files[@]}"; do
-            echo "Checking $f"
-            node --check "$f"
-          done
-          echo "All ${#files[@]} file(s) OK."

@@ -1,6 +1,6 @@
 ---
 name: add-new-tool
-description: 为 Claude-Provider-Profiles 新增 AI CLI 工具支持(如 OpenCode)
+description: 为 AI CLI Switcher 新增 AI CLI 工具支持(如 OpenCode)
 trigger: 用户说"新增工具支持"、"支持 OpenCode"、"添加新 CLI"
 ---
 

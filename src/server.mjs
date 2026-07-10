@@ -15,7 +15,7 @@ function getArgValue(name) {
   return index >= 0 ? args[index + 1] : null;
 }
 
-const port = Number(getArgValue('--port') || 15722);
+const port = Number(getArgValue('--port') || 15723);
 const requestedTool = getArgValue('--tool');
 const activeTool = ['claude', 'codex'].includes(requestedTool) ? requestedTool : 'claude';
 const userHome = process.env.USERPROFILE || process.env.HOME;

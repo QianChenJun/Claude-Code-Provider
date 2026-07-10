@@ -2,13 +2,26 @@
 node_modules/
 package-lock.json
 
-# Distribution
+# Build and release artifacts
 *.zip
+/Claude-Provider-Profiles-Kit/src/
 
-# Real configs (contain API keys)
+# Local configs and secrets
 providers.json
 ccp-generated-shortcuts.json
 cdp-generated-shortcuts.json
+.env
+.env.*
+!.env.example
+
+# Logs, caches and temporary files
+*.log
+*.tmp
+*.bak
+*.pid
+.cache/
+coverage/
+TestResults/
 
 # OS files
 Thumbs.db
@@ -22,9 +35,12 @@ Desktop.ini
 .vscode/
 .idea/
 
-# Claude Code local
-.claude/settings.local.json
-.ace-tool/
+# Local AI tooling
+/.claude/
+/.codex/
+/.ace-tool/
+/.playwright-mcp/
 
-# Local browser automation artifacts
-.playwright-mcp/
+# Local planning and distribution notes
+/goal-*/
+/Claude-Provider-Profiles-Kit/同事使用说明.md

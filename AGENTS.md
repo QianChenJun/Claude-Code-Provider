@@ -1,8 +1,8 @@
-# Claude-Provider-Profiles AI 开发指南
+# AI CLI Switcher AI 开发指南
 
 ## 项目概述
 
-**Claude-Provider-Profiles** 是一个 Windows 下的 AI CLI 多供应商切换器,用同一套方式管理 Claude Code 和 Codex CLI 的不同供应商配置(小米 MiMo、DeepSeek、OpenRouter、Azure OpenAI 等)。
+**AI CLI Switcher** 是一个 Windows 下的 AI CLI 多供应商切换器,用同一套方式管理 Claude Code 和 Codex CLI 的不同供应商配置(小米 MiMo、DeepSeek、OpenRouter、Azure OpenAI 等)。
 
 **核心特性**:
 - PowerShell + Node.js 架构,零外部依赖
@@ -17,7 +17,7 @@
 
 | 层次 | 技术 |
 |------|------|
-| **核心逻辑** | PowerShell 5.1+ / 7+ (模块化) |
+| **核心逻辑** | PowerShell 7+ (模块化) |
 | **Web UI** | Node.js 18+ HTTP 服务 + 纯 Vanilla JS 前端 |
 | **配置存储** | JSON (UTF-8 无 BOM) |
 | **CLI 参数覆盖** | TOML (Codex `-c` 参数) |
@@ -167,7 +167,7 @@ Sync-ToolShortcuts -ToolName 'claude'
   ↓
 Manage-ClaudeUI.ps1 启动 server.mjs --auth-token=xxx
   ↓
-浏览器打开 http://127.0.0.1:15722/auth?token=xxx&tool=claude
+浏览器打开 http://127.0.0.1:15723/auth?token=xxx&tool=claude
   ↓
 后端设置 HttpOnly Cookie + 302 跳转
   ↓
@@ -299,16 +299,13 @@ ccp profiles import -InDir "$HOME\Desktop\backup"
 
 ## 核心架构约定
 
-### 1. 文件读写规则(重要)
+### 1. 文件编码与读写
 
-⚠️ **本机装有 E-SafeNet 加密代理**,内置 Read/Write/Edit 工具会读到加密壳。
+文本文件统一使用 UTF-8；JSON 配置和新建文本文件使用 UTF-8 无 BOM。修改既有文件时应保留原有换行风格，并在写回后复读确认。
 
-**必须使用 PowerShell 工具读写**:
+需要精确控制编码时可使用 .NET 文件 API：
 ```powershell
-# 读取
 $content = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-
-# 写入(UTF-8 无 BOM)
 [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
 ```
 
@@ -515,7 +512,7 @@ Restore-EnvSession -Session $session
 
 ### ❌ 禁止事项
 
-- ❌ 不要使用 Read/Write/Edit 工具读写 PowerShell/JS/JSON 文件
+- ❌ 不要在未确认编码和换行风格时批量重写文件
 - ❌ 不要跳过 `Assert-ProviderProfileInput` 校验
 - ❌ 不要在配置文件中明文存储 API Key(应使用环境变量)
 - ❌ 不要破坏 Web UI 的 per-tool 内存机制
@@ -560,7 +557,7 @@ Restore-EnvSession -Session $session
 
 ### 必需依赖
 
-- **PowerShell**: 5.1+ / 7+(推荐)
+- **PowerShell**: 7+
 - **Node.js**: 18+ (仅 Web UI)
 - **claude**: Claude Code CLI 本体(可选)
 - **codex**: Codex CLI 本体(可选)
@@ -606,8 +603,8 @@ $env:OPENROUTER_CLAUDE_API_KEY = "sk-xxx"
 
 **解决**:
 1. 手动同步: `ccp sync`
-2. 检查 shim 文件: `cat $env:USERPROFILE\.claude\bin\ccp-mi.ps1`
-3. 检查配置文件: `cat $env:USERPROFILE\.claude\provider-profiles\providers.json`
+2. 检查 shim 文件: `Get-Content -LiteralPath $env:USERPROFILE\.claude\bin\ccp-mi.ps1 -Raw`
+3. 检查配置文件: `Get-Content -LiteralPath $env:USERPROFILE\.claude\provider-profiles\providers.json -Raw -Encoding UTF8`
 
 ### Web UI 保存失败
 

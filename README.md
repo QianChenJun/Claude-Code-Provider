@@ -1,5 +1,10 @@
 # AI CLI Switcher
 
+[![CI](https://github.com/QianChenJun/Claude-Code-Provider/actions/workflows/ci.yml/badge.svg)](https://github.com/QianChenJun/Claude-Code-Provider/actions/workflows/ci.yml)
+[![Release](https://github.com/QianChenJun/Claude-Code-Provider/actions/workflows/release.yml/badge.svg)](https://github.com/QianChenJun/Claude-Code-Provider/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D4.svg)](#运行要求)
+
 **一个 Windows 下的 AI CLI 多供应商切换器。**
 
 用同一套方式管理 Claude Code、Codex CLI 的不同供应商配置：小米 MiMo、DeepSeek、OpenRouter、Azure OpenAI 或任意兼容接口。
@@ -8,9 +13,22 @@
 |------|----------|------|
 | Claude Code | `ccp` | Anthropic/Claude Code 兼容接口 |
 | Codex CLI | `cdp` | OpenAI/Codex 兼容接口 |
-| OpenCode | `ocp` | 计划中 |
+| OpenCode | `ocp` | 规划中，当前尚不可用 |
 
-> 仅限 Windows · PowerShell 5.1+ / PowerShell 7+ · MIT License
+> 仅限 Windows · PowerShell 7+ · MIT License
+
+---
+
+## 运行要求
+
+| 依赖 | 要求 | 用途 |
+|------|------|------|
+| Windows | Windows 10/11 | 必需 |
+| PowerShell | 7+ | 安装、配置与启动 |
+| Node.js | 18+ | 仅 Web 管理页面需要 |
+| Claude Code / Codex CLI | 按需安装 | 实际执行对应 AI CLI |
+
+项目通过 GitHub Actions 持续执行 PowerShell 测试、PSScriptAnalyzer 检查和 JavaScript 语法检查。
 
 ---
 
@@ -18,7 +36,7 @@
 
 ### 1. 安装
 
-**一键远程安装（推荐）** — PowerShell 里粘贴一行，自动下载源码并安装到 `~/.claude` 与 `~/.codex`，并把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH：
+**一键远程安装（便捷）** — 在 PowerShell 7 中粘贴一行，自动下载源码并安装到 `~/.claude` 与 `~/.codex`，并把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH：
 
 ```powershell
 & ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath
@@ -30,7 +48,9 @@
 & ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath -Configure
 ```
 
-**或者下载 Release 包**（内网/无法访问 GitHub raw 时）：
+> 远程安装会执行 `main` 分支中的脚本。企业或安全敏感环境建议从 [Releases](https://github.com/QianChenJun/Claude-Code-Provider/releases) 下载固定版本，检查脚本后再运行。
+
+**下载 Release 包（企业或安全敏感环境推荐）**：
 
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit
@@ -260,6 +280,7 @@ cdp mi
 
 ```text
 .
+├── .github/                           # CI、Release、Issue 与 PR 模板
 ├── src/
 │   ├── core/
 │   │   └── ProviderCore.psm1          # 共享核心逻辑
@@ -272,8 +293,11 @@ cdp mi
 │   ├── web/                           # Web 管理页面
 │   └── server.mjs                     # 本地 HTTP 服务
 ├── config/                            # 示例配置模板
+├── docs/                              # 开发记录与补充文档
 ├── Claude-Provider-Profiles-Kit/      # 发布包内容
 ├── tests/                             # PowerShell 自检脚本
+├── CONTRIBUTING.md                    # 贡献指南
+├── SECURITY.md                        # 安全披露策略
 └── init.ps1                           # 开发环境快捷入口
 ```
 
@@ -421,6 +445,15 @@ $ToolName = 'opencode'
 $ProviderArgs = $args
 . "$PSScriptRoot\..\Invoke-Provider.ps1"
 ```
+
+---
+
+## 参与贡献与反馈
+
+- 使用问题或缺陷请提交 [Bug 报告](https://github.com/QianChenJun/Claude-Code-Provider/issues/new?template=bug_report.yml)
+- 功能建议请提交 [功能请求](https://github.com/QianChenJun/Claude-Code-Provider/issues/new?template=feature_request.yml)
+- 准备提交代码前请阅读 [贡献指南](CONTRIBUTING.md)
+- 安全问题请按照 [安全策略](SECURITY.md) 私下报告，不要创建公开 Issue
 
 ---
 

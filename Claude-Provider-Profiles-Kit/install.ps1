@@ -1,4 +1,5 @@
 #!/usr/bin/env pwsh
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     安装 Provider Profiles 工具集（Claude Code + Codex CLI）。
