@@ -940,7 +940,7 @@ exit `$LASTEXITCODE
     Write-Output "已同步：$prefix / $prefix-list / $prefix-setup / $prefix-sync / $prefix-manager"
 
     foreach ($entry in ($config.profiles.GetEnumerator() | Sort-Object { $_.Key })) {
-        $id      = $entry.Key
+        $id      = "$($entry.Key)"
         $profile = $entry.Value
 
         if ($reservedProfileIds.Contains($id.ToLowerInvariant())) {
@@ -950,13 +950,16 @@ exit `$LASTEXITCODE
 
         $shortcut = Get-ProfileValue -Map $profile -Names @('shortcut')
         if (-not $shortcut) { $shortcut = "$id-$suffix" }
-        Register-ProfileShortcutName -Name $shortcut -Owner $id
 
         $prefixedCmd = "$prefix-$id"
-        Register-ProfileShortcutName -Name $prefixedCmd -Owner $id
-
-        # 配置 ID 直呼快捷命令：用户自定义 ID 即命令名，无需前后缀
-        Register-ProfileShortcutName -Name $id -Owner $id
+        # shortcut 可能与配置 ID 相同（例如 shortcut=temp 且 id=temp）；去重后注册，避免自冲突
+        $aliasNames = [System.Collections.Generic.List[string]]::new()
+        $seenAlias  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($name in @($shortcut, $prefixedCmd, $id)) {
+            if ($seenAlias.Add($name)) {
+                [void]$aliasNames.Add($name)
+            }
+        }
 
         $shortcutContent = @"
 #!/usr/bin/env pwsh
@@ -964,11 +967,12 @@ exit `$LASTEXITCODE
 exit `$LASTEXITCODE
 "@
 
-        Write-Shim -Path (Join-Path $binDir "$shortcut.ps1") -Content $shortcutContent
-        Write-Shim -Path (Join-Path $binDir "$prefixedCmd.ps1") -Content $shortcutContent
-        Write-Shim -Path (Join-Path $binDir "$id.ps1") -Content $shortcutContent
+        foreach ($name in $aliasNames) {
+            Register-ProfileShortcutName -Name $name -Owner $id
+            Write-Shim -Path (Join-Path $binDir "$name.ps1") -Content $shortcutContent
+        }
 
-        Write-Output "已同步：$id / $shortcut / $prefixedCmd"
+        Write-Output "已同步：$($aliasNames -join ' / ')"
     }
 
     # Clean up stale shortcuts

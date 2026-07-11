@@ -312,7 +312,15 @@ function collectConfig() {
     }
 
     const shortcut = profile.shortcut || `${id}-${meta.suffix}`;
-    const cmdNames = [shortcut, `${meta.prefix}-${id}`, id];
+    // shortcut 可能与配置 ID 相同；按大小写不敏感去重，避免自冲突
+    const cmdNames = [];
+    const seenLocal = new Set();
+    for (const name of [shortcut, `${meta.prefix}-${id}`, id]) {
+      const key = name.toLowerCase();
+      if (seenLocal.has(key)) continue;
+      seenLocal.add(key);
+      cmdNames.push(name);
+    }
 
     for (const name of cmdNames) {
       if (!profileIdPattern.test(name)) throw new Error(`${id}: 快捷命令不合法：${name}`);

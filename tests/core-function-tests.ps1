@@ -100,6 +100,30 @@ try {
     }
     Assert-True -Condition $missingFailed -Message 'Resolve-ApiKey 缺少密钥时应抛出可读错误'
 
+    # shortcut 与配置 ID 相同时，同步不应因自冲突失败
+    $codexRoot = Join-Path $tempHome '.codex\provider-profiles'
+    $codexBin = Join-Path $tempHome '.codex\bin'
+    New-Item -ItemType Directory -Force -Path (Join-Path $codexRoot 'src\tools\codex') | Out-Null
+    New-Item -ItemType Directory -Force -Path $codexBin | Out-Null
+    $configPath = Join-Path $codexRoot 'providers.json'
+    Write-Utf8Text -Path $configPath -Text @'
+{
+  "version": 1,
+  "profiles": {
+    "temp": {
+      "displayName": "临时",
+      "shortcut": "temp",
+      "baseUrl": "https://example.com/v1",
+      "apiKey": "sk-test",
+      "wireApi": "responses"
+    }
+  }
+}
+'@
+    Sync-ToolShortcuts -ToolName 'codex' | Out-Null
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'temp.ps1')) -Message 'shortcut=id 时应生成 temp.ps1'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'cdp-temp.ps1')) -Message 'shortcut=id 时应生成 cdp-temp.ps1'
+
     Write-Output 'core-function-tests: PASS'
 }
 finally {
