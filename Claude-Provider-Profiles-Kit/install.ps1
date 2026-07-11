@@ -303,18 +303,23 @@ Write-Output ""
 Write-Output "Claude Code (ccp):"
 Write-Output "  配置文件：$claudeConfigPath"
 Write-Output "  快捷命令：$claudeBin"
-Write-Output "  使用：ccp / ccp setup / ccp mi / ccp list / ccp manager / ccp profiles"
+Write-Output "  下一步：ccp setup → ccp list → ccp <id>"
 Write-Output ""
 Write-Output "Codex CLI (cdp):"
 Write-Output "  配置文件：$codexConfigPath"
 Write-Output "  快捷命令：$codexBin"
-Write-Output "  使用：cdp / cdp setup / cdp ds / cdp list / cdp manager / cdp profiles"
+Write-Output "  下一步：cdp setup → cdp list → cdp <id>"
+Write-Output ""
+Write-Output "说明："
+Write-Output "  - 首次安装默认空配置，不会预置具体供应商"
+Write-Output "  - setup 默认把 API Key 写入 providers.json；更安全可用 apiKeyEnv"
+Write-Output "  - 推荐命令：ccp <id> / cdp <id>（同步生成 ccp-<id> 等快捷方式，不生成裸 id 命令）"
 Write-Output ""
 
 if (-not $AddPath) {
     Write-Warning "如需自动加入用户级 PATH，请重新执行：.\install.ps1 -AddPath"
 } else {
-    Write-Output "已修改用户级 PATH，仅新增 .claude\bin / .codex\bin；推荐优先使用 ccp <profile> / cdp <profile> 子命令。"
+    Write-Output "已修改用户级 PATH，仅新增 .claude\bin / .codex\bin。"
     Write-Output "请重新打开 PowerShell / Windows Terminal 后使用快捷命令。"
 }
 

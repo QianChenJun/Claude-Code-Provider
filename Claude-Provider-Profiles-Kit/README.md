@@ -1,8 +1,13 @@
 # AI CLI Switcher 安装包
 
-这是给普通用户使用的安装包。它会安装 `ccp`（Claude Code）和 `cdp`（Codex CLI）两套供应商切换命令。
+给普通用户使用的安装包，安装后提供：
+
+- `ccp`：Claude Code 供应商切换
+- `cdp`：Codex CLI 供应商切换
 
 > Windows only · PowerShell 7+ · 不包含真实 API Key
+
+仓库与源码：https://github.com/QianChenJun/Claude-Code-Provider
 
 ---
 
@@ -18,26 +23,22 @@ node --version       # Web 管理页面需要 Node.js 18+，可选
 
 ---
 
-## 推荐安装方式
+## 安装
 
-**最快 — 一键远程安装**（在 PowerShell 7 中直接粘贴；会把 `~\.claude\bin` / `~\.codex\bin` 加入用户级 PATH）：
+**最快 — 一键远程安装**（PowerShell 7）：
 
 ```powershell
 & ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath
 ```
 
-> 远程安装会执行 `main` 分支中的脚本。企业或安全敏感环境建议从 GitHub Releases 下载固定版本，检查 `install.ps1` 后再运行。
-
-**本地解压后安装（推荐用于企业或安全敏感环境）**：
+**本地解压后安装**（企业或安全敏感环境推荐）：
 
 ```powershell
 cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath
 ```
 
-`-AddPath` 会修改当前 Windows 用户的 PATH。安装后重新打开 PowerShell / Windows Terminal。
-
-预检（不写入任何文件）：
+预检（不写文件）：
 
 ```powershell
 .\install.ps1 -DryRun
@@ -49,88 +50,57 @@ cd <解压目录>\Claude-Provider-Profiles-Kit
 .\install.ps1 -AddPath -Configure
 ```
 
-远程版给参数（如 PATH + 配置向导）：
+`-AddPath` 会修改当前 Windows 用户 PATH。安装后请重新打开终端。
 
-```powershell
-& ([scriptblock]::Create((iwr https://raw.githubusercontent.com/QianChenJun/Claude-Code-Provider/main/Claude-Provider-Profiles-Kit/install.ps1).Content)) -AddPath -Configure
-```
+> 首次安装默认是**空配置**，不会预置具体供应商。请用 `ccp setup` / `cdp setup` 添加。
 
 ---
 
 ## 新增供应商
 
-推荐使用配置向导：
-
 ```powershell
-ccp setup     # 配置 Claude Code 供应商
-cdp setup     # 配置 Codex CLI 供应商
+ccp setup
+cdp setup
 ```
 
-你只需要按提示填写：
+按提示填写：
 
-- 配置 ID：例如 `mi`、`ds`、`openrouter`
+- 配置 ID（例如 `ds`、`openrouter`）
 - 显示名称
 - 接口地址 `baseUrl`
 - 默认模型 `model`
 - API Key
 
-API Key 会写入 Windows 用户环境变量，不会写进配置文件。
+**当前默认行为：** API Key 会明文写入用户目录下的 `providers.json`。  
+若希望从环境变量读取，可在配置中使用 `apiKeyEnv` 并删除 `apiKey` 字段。
 
 ---
 
-## 启动
+## 日常使用
 
 ```powershell
-ccp mi        # 使用 mi 配置启动 Claude Code
-ccp ds        # 使用 ds 配置启动 Claude Code
-cdp mi        # 使用 mi 配置启动 Codex CLI
-cdp ds        # 使用 ds 配置启动 Codex CLI
-```
-
-打开交互菜单：
-
-```powershell
-ccp
-cdp
-```
-
-查看配置：
-
-```powershell
+ccp                 # 菜单
 ccp list
-cdp list
+ccp my-provider
+ccp-my-provider     # 等价快捷命令
+
+cdp my-provider
+cdp manager         # Web 管理页（需 Node.js）
 ```
 
----
-
-## Web 管理页面
-
-```powershell
-ccp manager
-cdp manager
-```
-
-需要 Node.js 18+。Web 页面可新增、复制、删除供应商配置，并一键保存同步快捷命令。
-管理页只监听 `127.0.0.1`。通过 `ccp manager` / `cdp manager` 打开时会自动携带随机本地 token；未授权请求不能读取或修改配置。
+推荐使用 `ccp <id>` / `cdp <id>`。  
+同步会生成 `ccp-<id>` 与兼容 shortcut，**不会**生成裸配置 ID 命令，避免与另一套工具 PATH 冲突。
 
 ---
 
-## 常用命令
+## 配置位置
 
-| 操作 | Claude Code | Codex CLI |
-|------|-------------|-----------|
-| 配置向导 | `ccp setup` | `cdp setup` |
-| 启动配置 | `ccp mi` | `cdp mi` |
-| 查看列表 | `ccp list` | `cdp list` |
-| 同步命令 | `ccp sync` | `cdp sync` |
-| Web 管理 | `ccp manager` | `cdp manager` |
-| 备份/导入 | `ccp profiles export/import` | `cdp profiles export/import` |
+| 工具 | 路径 |
+|------|------|
+| Claude Code | `%USERPROFILE%\.claude\provider-profiles\providers.json` |
+| Codex CLI | `%USERPROFILE%\.codex\provider-profiles\providers.json` |
 
-安装脚本也会生成 `ccp-mi`、`cdp-ds`、`mi-claude`、`mi` 等兼容快捷命令，但文档、脚本和日常交流推荐优先使用 `ccp mi` / `cdp ds`。如果配置 ID 与系统命令或其他工具同名，直呼命令可能受 PATH 顺序影响，因此不要把常见命令名当作配置 ID。
-
----
-
-## 配置备份与迁移
+备份与迁移：
 
 ```powershell
 ccp profiles export -OutDir "$HOME\Desktop\provider-backup" -Tool all
@@ -139,63 +109,31 @@ ccp sync
 cdp sync
 ```
 
-导出默认会移除 `apiKey` / `token` / `key` 等明文密钥字段；环境变量名会保留，但 API Key 值不会导出。迁移到新机器后需要重新设置对应环境变量。
+导出默认会移除明文密钥字段；`apiKeyEnv` 名称会保留，值不会导出。
 
 ---
 
-## 配置文件位置
+## 安全建议
 
-| 工具 | 配置文件 |
-|------|----------|
-| Claude Code | `%USERPROFILE%\.claude\provider-profiles\providers.json` |
-| Codex CLI | `%USERPROFILE%\.codex\provider-profiles\providers.json` |
+- 默认明文 key 仅适合本机个人使用
+- 更安全：使用 `apiKeyEnv` / `apiKeyFile`
+- 不要把真实 API Key 提交到 git 或公开渠道
+- 企业环境请使用固定 Release，并先检查 `install.ps1`
 
-手动编辑配置后，执行：
+---
+
+## 常见问题
+
+**找不到 `ccp` / `cdp`：** 重新执行 `.\install.ps1 -AddPath` 并重开终端。
+
+**新增配置后命令不存在：**
 
 ```powershell
 ccp sync
 cdp sync
 ```
 
----
+**以前的 `any` / `gpt` 这种裸命令呢？**  
+当前版本不再生成裸配置 ID 命令，请改用 `ccp any` / `cdp any` 或 `ccp-any` / `cdp-any`。
 
-## 常见问题
-
-### `ccp` / `cdp` 命令找不到
-
-重新写入用户级 PATH：
-
-```powershell
-.\install.ps1 -AddPath
-```
-
-然后重开终端。
-
-### 提示缺少 API Key
-
-如果刚用 `ccp setup` / `cdp setup` 配置过，请重开终端。
-
-也可以手动设置：
-
-```powershell
-[Environment]::SetEnvironmentVariable('MI_CLAUDE_API_KEY', '你的 API Key', 'User')
-[Environment]::SetEnvironmentVariable('DS_CODEX_API_KEY', '你的 API Key', 'User')
-```
-
-### 不想覆盖已有配置
-
-默认不会覆盖已有 `providers.json`。
-
-只有显式指定才会覆盖：
-
-```powershell
-.\install.ps1 -OverwriteConfig
-```
-
----
-
-## 安全建议
-
-- 不要把真实 API Key 写进仓库、聊天或提交记录
-- 优先使用配置向导或 `apiKeyEnv`
-- 发给别人前确认配置文件没有真实密钥
+完整文档见仓库主 [README.md](https://github.com/QianChenJun/Claude-Code-Provider/blob/main/README.md)。

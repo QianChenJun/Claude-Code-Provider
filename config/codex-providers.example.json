@@ -1,31 +1,4 @@
 {
   "version": 1,
-  "profiles": {
-    "mi": {
-      "displayName": "Xiaomi MiMo",
-      "baseUrl": "https://your-mi-endpoint.example/v1",
-      "apiKeyEnv": "MI_CODEX_API_KEY",
-      "model": "claude-sonnet-4-6"
-    },
-    "ds": {
-      "displayName": "DeepSeek",
-      "baseUrl": "https://api.deepseek.com",
-      "apiKeyEnv": "DS_CODEX_API_KEY",
-      "model": "deepseek-chat",
-      "modelContextWindow": 131072
-    },
-    "openrouter": {
-      "displayName": "OpenRouter",
-      "baseUrl": "https://openrouter.ai/api/v1",
-      "apiKeyEnv": "OPENROUTER_CODEX_API_KEY",
-      "model": "anthropic/claude-sonnet-4-6"
-    },
-    "azure": {
-      "displayName": "Azure OpenAI",
-      "baseUrl": "https://your-resource.openai.azure.com/openai",
-      "apiKeyEnv": "AZURE_CODEX_API_KEY",
-      "model": "gpt-4.1",
-      "queryParams": { "api-version": "2025-04-01-preview" }
-    }
-  }
+  "profiles": {}
 }

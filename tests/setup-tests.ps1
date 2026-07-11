@@ -308,10 +308,10 @@ try {
     $codexConfigPath = Join-Path $tempHome '.codex\provider-profiles\providers.json'
     $codexConfig = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($codexConfigPath)) | ConvertFrom-Json
     foreach ($profileId in @('mi', 'ds')) {
-        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "$profileId.ps1")) -Message "应生成 $profileId.ps1（配置 ID 直呼）"
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $codexBin "$profileId.ps1"))) -Message "不应生成 $profileId.ps1（避免跨工具裸 ID 冲突）"
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "$profileId-codex.ps1")) -Message "应生成 $profileId-codex.ps1（默认 shortcut）"
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin "cdp-$profileId.ps1")) -Message "应生成 cdp-$profileId.ps1（前缀形式）"
-        Assert-Equal -Actual $codexConfig.profiles.$profileId.apiKey -Expected "sk-$profileId" -Message "$profileId 应把 apiKey 直接写入 providers.json"
+        Assert-equal -Actual $codexConfig.profiles.$profileId.apiKey -Expected "sk-$profileId" -Message "$profileId 应把 apiKey 直接写入 providers.json"
     }
 
     $codexConfigMap = Read-JsonFile -Path $codexConfigPath

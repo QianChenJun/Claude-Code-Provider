@@ -22,7 +22,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('sync', 'setup', 'web', 'list', 'check', 'help', '')]
+    [ValidateSet('sync', 'setup', 'web', 'list', 'check', 'test', 'help', '')]
     [string]$Action = ''
 )
 
@@ -151,6 +151,12 @@ switch ($Action) {
         . (Join-Path $repoRoot 'src\tools\Manage-ProviderUI.ps1')
     }
 
+    'test' {
+        Write-Header "运行测试"
+        & (Join-Path $repoRoot 'tests\run-all.ps1')
+        exit $LASTEXITCODE
+    }
+
     'help' {
         Write-Header "AI CLI Switcher — 帮助"
         Write-Output "用法：.\init.ps1 <command>"
@@ -160,11 +166,12 @@ switch ($Action) {
         Write-Output "  setup   交互式新增或更新供应商配置"
         Write-Output "  sync    同步快捷命令到 bin 目录"
         Write-Output "  web     启动统一 Web 管理台"
+        Write-Output "  test    运行全部自检"
         Write-Output "  help    显示此帮助"
         Write-Output ""
-        Write-Output "快捷命令（同步后可用）："
-        Write-Output "  ccp / ccp setup / ccp mi / ccp list / ccp manager / ccp profiles"
-        Write-Output "  cdp / cdp setup / cdp ds / cdp list / cdp manager / cdp profiles"
+        Write-Output "快捷命令（安装/同步后可用）："
+        Write-Output "  ccp / ccp setup / ccp <id> / ccp list / ccp manager / ccp profiles"
+        Write-Output "  cdp / cdp setup / cdp <id> / cdp list / cdp manager / cdp profiles"
         Write-Output ""
         Write-Output "详细文档：README.md"
     }
@@ -183,6 +190,7 @@ switch ($Action) {
         Write-Output "  .\init.ps1 setup   配置向导"
         Write-Output "  .\init.ps1 sync    同步快捷命令"
         Write-Output "  .\init.ps1 web     启动 Web 管理台"
+        Write-Output "  .\init.ps1 test    运行全部自检"
         Write-Output "  .\init.ps1 help    查看完整帮助"
     }
 }

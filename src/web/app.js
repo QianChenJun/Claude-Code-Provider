@@ -252,7 +252,7 @@ function updatePreview(card) {
     baseUrl
   ].filter(Boolean).join(' / ');
   card.querySelector('[data-preview]').textContent =
-    `推荐：${meta.prefix}-${id}；通用：${meta.prefix} ${id}；兼容：${shortcut}`;
+    `推荐：${meta.prefix} ${id}；快捷：${meta.prefix}-${id}；兼容：${shortcut}`;
 }
 
 function renderConfig(config) {
@@ -312,10 +312,10 @@ function collectConfig() {
     }
 
     const shortcut = profile.shortcut || `${id}-${meta.suffix}`;
-    // shortcut 可能与配置 ID 相同；按大小写不敏感去重，避免自冲突
+    // 不生成裸配置 ID 命令，避免跨工具 PATH 冲突；shortcut 与 prefix-id 去重
     const cmdNames = [];
     const seenLocal = new Set();
-    for (const name of [shortcut, `${meta.prefix}-${id}`, id]) {
+    for (const name of [`${meta.prefix}-${id}`, shortcut]) {
       const key = name.toLowerCase();
       if (seenLocal.has(key)) continue;
       seenLocal.add(key);

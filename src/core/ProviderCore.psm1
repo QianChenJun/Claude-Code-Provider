@@ -555,10 +555,12 @@ function Write-Usage {
     Write-Output "  $prefix setup [profile]         # 新增或更新配置"
     Write-Output "  $prefix profiles <action>       # 备份/导入/查看配置"
     Write-Output "  $prefix-list"
-    Write-Output "  $prefix-<profile> [$($Tool.name) args]"
+    Write-Output "  $prefix-<profile> [$($Tool.name) args]   # 快捷命令"
     Write-Output "  $prefix-setup [profile]"
     Write-Output "  $prefix-sync"
     Write-Output "  $prefix-manager"
+    Write-Output ""
+    Write-Output "说明：推荐使用 `$prefix <profile>`；同步会生成 `$prefix-<profile>` 与兼容 shortcut，不会生成裸配置 ID 命令。"
     Write-Output ""
     Write-Output "可用配置："
     Write-ProfileTable -Profiles $Profiles -Tool $Tool
@@ -946,16 +948,21 @@ exit `$LASTEXITCODE
         if ($reservedProfileIds.Contains($id.ToLowerInvariant())) {
             throw "配置 ID 与内置菜单命令冲突：$id"
         }
+        if ($reservedCmdNames.Contains($id)) {
+            throw "配置 ID 与内置快捷命令冲突：$id"
+        }
         Assert-ShortcutName -Name $id
 
         $shortcut = Get-ProfileValue -Map $profile -Names @('shortcut')
         if (-not $shortcut) { $shortcut = "$id-$suffix" }
 
         $prefixedCmd = "$prefix-$id"
-        # shortcut 可能与配置 ID 相同（例如 shortcut=temp 且 id=temp）；去重后注册，避免自冲突
+        # 只生成 prefix-id 与兼容 shortcut，不生成裸配置 ID。
+        # 避免 .claude\bin 与 .codex\bin 同时出现 any.ps1 / gpt.ps1 时 PATH 抢占。
+        # shortcut 可能与 prefix-id 相同；去重后注册，避免自冲突。
         $aliasNames = [System.Collections.Generic.List[string]]::new()
         $seenAlias  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-        foreach ($name in @($shortcut, $prefixedCmd, $id)) {
+        foreach ($name in @($prefixedCmd, $shortcut)) {
             if ($seenAlias.Add($name)) {
                 [void]$aliasNames.Add($name)
             }
