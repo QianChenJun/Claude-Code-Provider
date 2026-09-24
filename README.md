@@ -106,7 +106,7 @@ cdp-my-provider
 ```
 
 推荐日常使用：`ccp <id>` / `cdp <id>`。  
-同步还会生成 `ccp-<id>`、兼容 shortcut（如 `my-provider-claude`），**不会**再生成裸配置 ID 命令（避免 Claude / Codex 两边 PATH 抢占）。
+同步还会生成 `ccp-<id>`、兼容 shortcut（如 `my-provider-claude`），以及裸配置 ID 命令（如 `any`）。裸 ID 若与另一套工具的 bin 同名，则由 PATH 顺序决定生效者，建议优先使用 `ccp <id>` / `cdp <id>`。
 
 ---
 
@@ -235,10 +235,11 @@ ccp sync
 cdp sync
 ```
 
-### 以前的裸配置 ID 命令（如 `any`、`gpt`）呢？
+### 裸配置 ID 命令（如 `any`、`temp`）会生成吗？
 
-从当前版本起，同步**不再生成**裸配置 ID 命令，避免 Claude / Codex 两边互相覆盖。  
-请改用：
+会生成。同步会为每个配置生成裸配置 ID 命令。
+
+如果同一个名字在 Claude 和 Codex 两边都存在（例如 `any`、`temp`），则由 PATH 顺序决定生效者，建议改用无歧义写法：
 
 ```powershell
 ccp any

@@ -312,10 +312,10 @@ function collectConfig() {
     }
 
     const shortcut = profile.shortcut || `${id}-${meta.suffix}`;
-    // 不生成裸配置 ID 命令，避免跨工具 PATH 冲突；shortcut 与 prefix-id 去重
+    // 生成 prefix-id、快捷名与裸配置 ID；按大小写不敏感去重，避免与 shortcut 自冲突
     const cmdNames = [];
     const seenLocal = new Set();
-    for (const name of [`${meta.prefix}-${id}`, shortcut]) {
+    for (const name of [shortcut, `${meta.prefix}-${id}`, id]) {
       const key = name.toLowerCase();
       if (seenLocal.has(key)) continue;
       seenLocal.add(key);

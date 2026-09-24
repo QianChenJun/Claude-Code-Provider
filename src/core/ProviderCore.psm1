@@ -560,7 +560,7 @@ function Write-Usage {
     Write-Output "  $prefix-sync"
     Write-Output "  $prefix-manager"
     Write-Output ""
-    Write-Output "说明：推荐使用 `$prefix <profile>`；同步会生成 `$prefix-<profile>` 与兼容 shortcut，不会生成裸配置 ID 命令。"
+    Write-Output "说明：推荐使用 `$prefix <profile>`；同步会生成 `$prefix-<profile>`、兼容 shortcut 与裸配置 ID 命令。"
     Write-Output ""
     Write-Output "可用配置："
     Write-ProfileTable -Profiles $Profiles -Tool $Tool
@@ -957,12 +957,12 @@ exit `$LASTEXITCODE
         if (-not $shortcut) { $shortcut = "$id-$suffix" }
 
         $prefixedCmd = "$prefix-$id"
-        # 只生成 prefix-id 与兼容 shortcut，不生成裸配置 ID。
-        # 避免 .claude\bin 与 .codex\bin 同时出现 any.ps1 / gpt.ps1 时 PATH 抢占。
-        # shortcut 可能与 prefix-id 相同；去重后注册，避免自冲突。
+        # 生成 prefix-id、兼容 shortcut 与裸配置 ID 三种命令。
+        # 注意：裸 ID 可能与另一套工具的 bin 重名（如 any / temp），同名时由 PATH 顺序决定谁生效。
+        # shortcut 可能与 prefix-id 或配置 ID 相同；去重后注册，避免自冲突。
         $aliasNames = [System.Collections.Generic.List[string]]::new()
         $seenAlias  = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-        foreach ($name in @($prefixedCmd, $shortcut)) {
+        foreach ($name in @($shortcut, $prefixedCmd, $id)) {
             if ($seenAlias.Add($name)) {
                 [void]$aliasNames.Add($name)
             }

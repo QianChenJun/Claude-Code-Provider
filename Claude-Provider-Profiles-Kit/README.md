@@ -89,7 +89,7 @@ cdp manager         # Web 管理页（需 Node.js）
 ```
 
 推荐使用 `ccp <id>` / `cdp <id>`。  
-同步会生成 `ccp-<id>` 与兼容 shortcut，**不会**生成裸配置 ID 命令，避免与另一套工具 PATH 冲突。
+同步会生成 `ccp-<id>`、兼容 shortcut 与裸配置 ID 命令。裸 ID 若与另一套工具的 bin 同名（如 `any`、`temp`），由 PATH 顺序决定生效者，此时建议用 `ccp <id>` / `cdp <id>`。
 
 ---
 
@@ -134,6 +134,6 @@ cdp sync
 ```
 
 **以前的 `any` / `gpt` 这种裸命令呢？**  
-当前版本不再生成裸配置 ID 命令，请改用 `ccp any` / `cdp any` 或 `ccp-any` / `cdp-any`。
+同步仍然会生成裸配置 ID 命令。若该名字在 Claude / Codex 两边都存在（如 `any`、`temp`），由 PATH 顺序决定生效者，建议改用 `ccp any` / `cdp any` 或 `ccp-any` / `cdp-any`。
 
 完整文档见仓库主 [README.md](https://github.com/QianChenJun/Claude-Code-Provider/blob/main/README.md)。

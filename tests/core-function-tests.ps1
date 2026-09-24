@@ -100,7 +100,7 @@ try {
     }
     Assert-True -Condition $missingFailed -Message 'Resolve-ApiKey 缺少密钥时应抛出可读错误'
 
-    # shortcut 与 prefix-id 去重后应可同步；且不再生成裸配置 ID 命令
+    # shortcut 与 prefix-id / 配置 ID 同名时去重后应可同步；并生成裸配置 ID 命令
     $codexRoot = Join-Path $tempHome '.codex\provider-profiles'
     $codexBin = Join-Path $tempHome '.codex\bin'
     New-Item -ItemType Directory -Force -Path (Join-Path $codexRoot 'src\tools\codex') | Out-Null
@@ -130,9 +130,9 @@ try {
     Sync-ToolShortcuts -ToolName 'codex' | Out-Null
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'cdp-temp.ps1')) -Message '应生成 cdp-temp.ps1'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'temp-codex.ps1')) -Message '应生成兼容 shortcut temp-codex.ps1'
-    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $codexBin 'temp.ps1'))) -Message '不应生成裸配置 ID 命令 temp.ps1'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'temp.ps1')) -Message '应生成裸配置 ID 命令 temp.ps1'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'cdp-any.ps1')) -Message 'shortcut=prefix-id 时应生成 cdp-any.ps1'
-    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $codexBin 'any.ps1'))) -Message '不应生成裸配置 ID 命令 any.ps1'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $codexBin 'any.ps1')) -Message '应生成裸配置 ID 命令 any.ps1'
 
     Write-Output 'core-function-tests: PASS'
 }
