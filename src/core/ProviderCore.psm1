@@ -1175,9 +1175,22 @@ if (-not $script:ToolRegistry.Contains('codex')) {
                 throw "当前仅支持 Codex 官方文档支持的 responses provider：$ProfileId"
             }
 
-            # Codex 的 /resume 会按 model_provider 过滤；所有 cdp profile 必须共用同一个 providerId。
+            # Codex 的历史按 model_provider 分桶；所有 cdp profile 跟随桌面 config.toml 的 provider ID，与官方侧边栏保持同一分桶。
             $safeProfile = (($ProfileId -replace '[^A-Za-z0-9_]', '_').Trim('_'))
-            $providerId  = 'cdp'
+            $providerId  = 'openai'
+            $codexConfigPath = Join-Path $script:UserHome '.codex\config.toml'
+            if (Test-Path -LiteralPath $codexConfigPath) {
+                foreach ($line in [System.IO.File]::ReadLines($codexConfigPath)) {
+                    if ($line -match '^\s*\[') { break }
+                    if ($line -match '^\s*model_provider\s*=\s*([''"])([^''"]+)\1') {
+                        $providerId = $Matches[2]
+                        break
+                    }
+                }
+            }
+            if ($providerId -notmatch '^[A-Za-z0-9_.-]+$') {
+                throw "Codex 配置中的 model_provider 不合法：$providerId"
+            }
             $tempKeyEnv  = "CODEX_PROVIDER_TOKEN_$($safeProfile.ToUpperInvariant())"
 
             Add-EnvSessionKey -Session $Session -Key $tempKeyEnv

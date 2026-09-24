@@ -316,12 +316,26 @@ try {
 
     $codexConfigMap = Read-JsonFile -Path $codexConfigPath
     $codexTool = Get-ProviderTool -Name 'codex'
-    foreach ($profileId in @('mi', 'ds')) {
-        $session = New-EnvSession
-        $launchResult = & $codexTool.launcher $codexConfigMap.profiles[$profileId] "sk-$profileId" $profileId @() $session
-        Assert-True -Condition (@($launchResult.LaunchArgs) -contains 'model_provider=cdp') -Message 'Codex 所有 profile 应共用 model_provider=cdp，保证 /resume 跨 profile 可见'
-        Assert-True -Condition (-not (@($launchResult.LaunchArgs) -contains "model_provider=cdp_$profileId")) -Message 'Codex 不应再使用按 profile 区分的 model_provider'
-        Assert-True -Condition (@($launchResult.LaunchArgs) -contains "model_providers.cdp.env_key=CODEX_PROVIDER_TOKEN_$($profileId.ToUpperInvariant())") -Message '共用 providerId 时仍应使用当前 profile 的临时 API Key 环境变量'
+    $desktopConfigPath = Join-Path $tempHome '.codex\config.toml'
+
+    # 桌面 config.toml 未声明 model_provider 时，回退到 codex 默认分桶
+    $session = New-EnvSession
+    $fallbackResult = & $codexTool.launcher $codexConfigMap.profiles['mi'] 'sk-mi' 'mi' @() $session
+    Assert-True -Condition (@($fallbackResult.LaunchArgs) -contains 'model_provider=openai') -Message '桌面 config.toml 无 model_provider 时应回退到 codex 默认的 openai 分桶'
+
+    # 桌面 config.toml 声明的 model_provider 应被所有 profile 共用
+    [System.IO.File]::WriteAllText($desktopConfigPath, "model_provider = `"desktop-custom`"`n", [System.Text.UTF8Encoding]::new($false))
+    try {
+        foreach ($profileId in @('mi', 'ds')) {
+            $session = New-EnvSession
+            $launchResult = & $codexTool.launcher $codexConfigMap.profiles[$profileId] "sk-$profileId" $profileId @() $session
+            Assert-True -Condition (@($launchResult.LaunchArgs) -contains 'model_provider=desktop-custom') -Message 'Codex 所有 profile 应共用桌面 config.toml 的 model_provider，保证与官方侧边栏同一会话分桶'
+            Assert-True -Condition (-not (@($launchResult.LaunchArgs) -contains "model_provider=cdp_$profileId")) -Message 'Codex 不应再使用按 profile 区分的 model_provider'
+            Assert-True -Condition (@($launchResult.LaunchArgs) -contains "model_providers.desktop-custom.env_key=CODEX_PROVIDER_TOKEN_$($profileId.ToUpperInvariant())") -Message '共用 providerId 时仍应使用当前 profile 的临时 API Key 环境变量'
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $desktopConfigPath -Force -ErrorAction SilentlyContinue
     }
     Remove-Item Env:\MI_CODEX_API_KEY -ErrorAction SilentlyContinue
     Remove-Item Env:\DS_CODEX_API_KEY -ErrorAction SilentlyContinue
