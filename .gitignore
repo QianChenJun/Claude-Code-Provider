@@ -40,6 +40,7 @@ Desktop.ini
 /.codex/
 /.ace-tool/
 /.playwright-mcp/
+/graphify-out/
 
 # Local planning and distribution notes
 /goal-*/
